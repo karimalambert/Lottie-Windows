@@ -1,5 +1,6 @@
 // Copyright(c) Microsoft Corporation.All rights reserved.
 // Licensed under the MIT License.
+#define POST_RS5_SDK
 
 // define POST_RS5_SDK if using an SDK that is for a release
 // after RS5
@@ -286,6 +287,24 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.CodeGen
             CanvasGeometry.TransformedGeometry obj,
             string typeName,
             string fieldName);
+
+        /// <summary>
+        /// Write the CompositeEffect factory code.
+        /// </summary>
+        /// <param name="builder">A <see cref="CodeBuilder"/> used to create the code.</param>
+        /// <param name="obj">Describes the object that should be instantiated by the factory code.</param>
+        /// <returns>string representation of the composite effect.</returns>
+        protected virtual string GenerateCompositeEffectFactory(CodeBuilder builder, CompositionEffectBrush obj)
+        {
+            builder.WriteLine($"{Var} compositeEffect = {New} CompositeEffect();");
+            builder.WriteLine($"compositeEffect{Deref}Mode = {CanvasCompositeMode(obj.Effect.Mode)};");
+            foreach (var source in obj.Effect.Sources)
+            {
+                builder.WriteLine($"compositeEffect{Deref}Sources{Deref}{IListAdd}({New} CompositionEffectSourceParameter({String(source)}));");
+            }
+
+            return "$compositeEffect";
+        }
 
         /// <summary>
         /// Call this to generate the code. Returns a string containing the generated code.
@@ -1322,14 +1341,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.CodeGen
         {
             WriteObjectFactoryStart(builder, node);
 
-            builder.WriteLine($"{Var} compositeEffect = {New} CompositeEffect();");
-            builder.WriteLine($"compositeEffect{Deref}Mode = {CanvasCompositeMode(obj.Effect.Mode)};");
-            foreach (var source in obj.Effect.Sources)
-            {
-                builder.WriteLine($"compositeEffect{Deref}Sources{Deref}{IListAdd}({New} CompositionEffectSourceParameter({String(source)}));");
-            }
+            var compiteEffectString = GenerateCompositeEffectFactory(builder, obj);
 
-            builder.WriteLine($"{Var} effectFactory = _c{Deref}CreateEffectFactory(compositeEffect);");
+            builder.WriteLine($"{Var} effectFactory = _c{Deref}CreateEffectFactory({compiteEffectString});");
             WriteCreateAssignment(builder, node, $"effectFactory{Deref}CreateBrush()");
             InitializeCompositionBrush(builder, obj, node);
 
@@ -1614,7 +1628,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.CodeGen
             }
         }
 
-        string CanvasCompositeMode(CanvasComposite value)
+        protected string CanvasCompositeMode(CanvasComposite value)
         {
             switch (value)
             {
