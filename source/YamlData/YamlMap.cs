@@ -24,8 +24,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.YamlData
         /// </summary>
         /// <param name="key">The property name.</param>
         /// <param name="value">The property value.</param>
+        /// <returns>The current object.</returns>
         /// <exception cref="InvalidOperationException">The property name has already been added.</exception>
-        public void Add(string key, YamlObject value)
+        public YamlMap Add(string key, YamlObject value)
         {
             if (!_keys.Add(key))
             {
@@ -33,6 +34,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.YamlData
             }
 
             _keysAndValues.Add((key, value));
+            return this;
         }
 
         /// <summary>
@@ -40,8 +42,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.YamlData
         /// </summary>
         /// <param name="key">The property name.</param>
         /// <param name="value">The property value.</param>
+        /// <returns>The current object.</returns>
         /// <exception cref="InvalidOperationException">The property name has already been added.</exception>
-        public void Add(string key, YamlScalar value) => Add(key, (YamlObject)value);
+        public YamlMap Add(string key, YamlScalar value)
+        {
+            Add(key, (YamlObject)value);
+            return this;
+        }
 
         IEnumerator<(string key, YamlObject value)> IEnumerable<(string key, YamlObject value)>.GetEnumerator()
             => _keysAndValues.GetEnumerator();

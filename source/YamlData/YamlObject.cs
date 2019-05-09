@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.IO;
+
 namespace Microsoft.Toolkit.Uwp.UI.Lottie.YamlData
 {
     /// <summary>
@@ -13,5 +15,15 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.YamlData
     abstract class YamlObject
     {
         internal abstract YamlObjectKind Kind { get; }
+
+        public override string ToString()
+        {
+            using (var textWriter = new StringWriter())
+            {
+                var writer = new YamlWriter(textWriter);
+                writer.WriteObject(this);
+                return textWriter.ToString();
+            }
+        }
     }
 }

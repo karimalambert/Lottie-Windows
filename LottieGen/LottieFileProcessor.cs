@@ -162,13 +162,18 @@ sealed class LottieFileProcessor
                     _profiler.OnSerializationFinished();
                     break;
 
+                case Lang.WinCompDgml:
+                    codeGenSucceeded &= TryGenerateWincompDgml($"{outputFileBase}.dgml");
+                    _profiler.OnSerializationFinished();
+                    break;
+
                 case Lang.WinCompXml:
                     codeGenSucceeded &= TryGenerateWincompXml($"{outputFileBase}-wincomp.xml");
                     _profiler.OnSerializationFinished();
                     break;
 
-                case Lang.WinCompDgml:
-                    codeGenSucceeded &= TryGenerateWincompDgml($"{outputFileBase}.dgml");
+                case Lang.WinCompYaml:
+                    codeGenSucceeded &= TryGenerateWincompYaml($"{outputFileBase}-wincomp.yaml");
                     _profiler.OnSerializationFinished();
                     break;
 
@@ -293,6 +298,25 @@ sealed class LottieFileProcessor
         return result;
     }
 
+    bool TryGenerateWincompDgml(string outputFilePath)
+    {
+        if (!TryEnsureTranslated())
+        {
+            return false;
+        }
+
+        var result = TryWriteTextFile(
+            outputFilePath,
+            CompositionObjectDgmlSerializer.ToXml(_rootVisual).ToString());
+
+        if (result)
+        {
+            _reporter.WriteInfo($"WinComp DGML written to {outputFilePath}");
+        }
+
+        return result;
+    }
+
     bool TryGenerateWincompXml(
         string outputFilePath)
     {
@@ -313,7 +337,8 @@ sealed class LottieFileProcessor
         return result;
     }
 
-    bool TryGenerateWincompDgml(string outputFilePath)
+    bool TryGenerateWincompYaml(
+        string outputFilePath)
     {
         if (!TryEnsureTranslated())
         {
@@ -322,11 +347,11 @@ sealed class LottieFileProcessor
 
         var result = TryWriteTextFile(
             outputFilePath,
-            CompositionObjectDgmlSerializer.ToXml(_rootVisual).ToString());
+            writer => CompositionObjectYamlSerializer.WriteYaml(_rootVisual, writer, _file));
 
         if (result)
         {
-            _reporter.WriteInfo($"WinComp DGML written to {outputFilePath}");
+            _reporter.WriteInfo($"Lottie YAML written to {outputFilePath}");
         }
 
         return result;

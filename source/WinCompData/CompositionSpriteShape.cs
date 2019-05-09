@@ -33,9 +33,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData
 
         public CompositionStrokeLineJoin StrokeLineJoin { get; set; } = CompositionStrokeLineJoin.Miter;
 
-        public CompositionStrokeCap StrokeStartCap { get; set; } = CompositionStrokeCap.Flat;
-
         public float StrokeMiterLimit { get; set; } = 1;
+
+        public CompositionStrokeCap StrokeStartCap { get; set; } = CompositionStrokeCap.Flat;
 
         public float StrokeThickness { get; set; } = 1;
 

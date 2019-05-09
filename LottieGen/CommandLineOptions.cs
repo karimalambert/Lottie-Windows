@@ -19,8 +19,9 @@ internal enum Lang
     WinrtCpp,
     LottieXml,
     LottieYaml,
-    WinCompXml,
     WinCompDgml,
+    WinCompXml,
+    WinCompYaml,
     Stats,
 }
 
@@ -79,6 +80,7 @@ sealed class CommandLineOptions
                 .AddKeyword("lottiexml", Lang.LottieXml)
                 .AddKeyword("lottieyaml", Lang.LottieYaml)
                 .AddKeyword("wincompxml", Lang.WinCompXml)
+                .AddKeyword("wincompyaml", Lang.WinCompYaml)
                 .AddKeyword("dgml", Lang.WinCompDgml)
                 .AddKeyword("stats", Lang.Stats);
 
