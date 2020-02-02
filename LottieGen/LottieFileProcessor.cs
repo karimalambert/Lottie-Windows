@@ -85,6 +85,11 @@ sealed class LottieFileProcessor
             return false;
         }
 
+        var testResult = TestJsonReader.ReadLottieCompositionFromJsonStream(
+            jsonStream,
+            default(TestJsonReader.Options),
+            out _readerIssues);
+
         // Parse the Lottie.
         _lottieComposition =
             LottieCompositionReader.ReadLottieCompositionFromJsonStream(

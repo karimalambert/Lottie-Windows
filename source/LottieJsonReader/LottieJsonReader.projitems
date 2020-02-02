@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>800ccbb9-dae1-4f5a-a733-62a55a094ce6</SharedGUID>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Serialization\LottieJsonReader_Animatables.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Serialization\LottieJsonReader_Assets.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Serialization\LottieJsonReader_Enums.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Serialization\LottieJsonReader_Layers.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Serialization\LottieJsonReader_Markers.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Serialization\LottieJsonReader_Primitives.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Serialization\LottieJsonReader.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Serialization\LottieJsonReader_Transforms.cs" />
+  </ItemGroup>
+</Project>
