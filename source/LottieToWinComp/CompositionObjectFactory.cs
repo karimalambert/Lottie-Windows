@@ -86,6 +86,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
         internal CompositionPathGeometry CreatePathGeometry(CompositionPath path) => _compositor.CreatePathGeometry(path);
 
+        internal CompositionPropertySet CreatePropertySet() => _compositor.CreatePropertySet();
+
         internal CompositionRectangleGeometry CreateRectangleGeometry()
         {
             // Rectangle geometries exist in version 7, but they are unreliable (they

@@ -42,6 +42,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         public virtual string Readonly(string value) => $"readonly {value}";
 
+        public virtual string FieldName(string value) => $"_{CamelCase(value)}";
+
         public string Bool(bool value) => value ? "true" : "false";
 
         public virtual string Color(Color value) => $"Color.FromArgb({Hex(value.A)}, {Hex(value.R)}, {Hex(value.G)}, {Hex(value.B)})";
