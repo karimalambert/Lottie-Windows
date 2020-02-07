@@ -152,12 +152,47 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         void WriteIAnimatedVisualSource(CodeBuilder builder, IAnimatedVisualSourceInfo info)
         {
             builder.WriteLine($"sealed class {info.ClassName} : IAnimatedVisualSource");
+            if (info.IsThemed)
+            {
+                builder.WriteLine(", IThemedAnimatedVisual");
+            }
+
             builder.OpenScope();
+
+            if (info.IsThemed)
+            {
+                builder.WriteLine($"CompositionPropertySet {info.ThemePropertiesFieldName};");
+                builder.WriteLine();
+                builder.WriteLine("public CompositionPropertySet GetThemeProperties(Compositor compositor)");
+                builder.OpenScope();
+                builder.WriteLine("return EnsureThemeProperties(compositor);");
+                builder.CloseScope();
+                builder.WriteLine();
+
+                builder.WriteLine("CompositionPropertySet EnsureThemeProperties(Compositor compositor)");
+                builder.OpenScope();
+                builder.WriteLine($"if ({info.ThemePropertiesFieldName} is null)");
+                builder.OpenScope();
+                builder.WriteLine($"{info.ThemePropertiesFieldName} = compositor.CreatePropertySet();");
+
+                // Initialize the values in the property set.
+                WriteThemePropertySetInitialization(builder, info.ThemePropertiesFieldName);
+
+                builder.CloseScope();
+                builder.WriteLine("return _themeProperties;");
+                builder.CloseScope();
+                builder.WriteLine();
+            }
 
             // Generate the method that creates an instance of the animated visual.
             builder.WriteLine("public IAnimatedVisual TryCreateAnimatedVisual(Compositor compositor, out object diagnostics)");
             builder.OpenScope();
             builder.WriteLine("diagnostics = null;");
+            if (info.IsThemed)
+            {
+                builder.WriteLine("EnsureThemeProperties(compositor);");
+            }
+
             builder.WriteLine();
 
             // Check the runtime version and instantiate the highest compatible IAnimatedVisual class.
@@ -308,6 +343,21 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.OpenScope();
         }
 
+        IEnumerable<string> GetConstructorParameters(IAnimatedVisualInfo info)
+        {
+            yield return "Compositor compositor";
+
+            if (info.AnimatedVisualSourceInfo.IsThemed)
+            {
+                yield return "CompositionPropertySet themeProperties";
+            }
+
+            foreach (var loadedImageSurfaceNode in info.LoadedImageSurfaceNodes)
+            {
+                yield return $"{_s.ReferenceTypeName(loadedImageSurfaceNode.TypeName)} {_s.CamelCase(loadedImageSurfaceNode.Name)}";
+            }
+        }
+
         /// <inheritdoc/>
         // Called by the base class to write the end of the AnimatedVisual class.
         protected override void WriteAnimatedVisualEnd(
@@ -315,34 +365,28 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             IAnimatedVisualInfo info)
         {
             // Write the constructor for the AnimatedVisual class.
-            if (info.LoadedImageSurfaceNodes.Count > 0)
+            builder.WriteLine($"internal {info.ClassName}(");
+            builder.Indent();
+            builder.WriteCommaSeparatedLines(GetConstructorParameters(info));
+            builder.WriteLine(")");
+            builder.UnIndent();
+            builder.OpenScope();
+
+            // Copy constructor parameters into fields.
+            builder.WriteLine("_c = compositor;");
+
+            if (info.AnimatedVisualSourceInfo.IsThemed)
             {
-                builder.WriteLine($"internal {info.ClassName}(");
-                builder.Indent();
-
-                // Define the image surface parameters of the AnimatedVisual() constructor.
-                builder.WriteCommaSeparatedLines("Compositor compositor", info.LoadedImageSurfaceNodes.Select(n => $"{_s.ReferenceTypeName(n.TypeName)} {_s.CamelCase(n.Name)}"));
-                builder.WriteLine(")");
-                builder.UnIndent();
-                builder.OpenScope();
-
-                builder.WriteLine("_c = compositor;");
-                builder.WriteLine($"{info.AnimatedVisualSourceInfo.ReusableExpressionAnimationFieldName} = compositor.CreateExpressionAnimation();");
-
-                // Initialize the private image surface variables with the input parameters of the constructor.
-                var loadedImageSurfaceNodes = info.LoadedImageSurfaceNodes;
-                foreach (var n in loadedImageSurfaceNodes)
-                {
-                    builder.WriteLine($"{n.FieldName} = {_s.CamelCase(n.Name)};");
-                }
+                builder.WriteLine($"{info.AnimatedVisualSourceInfo.ThemePropertiesFieldName} = themeProperties;");
             }
-            else
+
+            var loadedImageSurfaceNodes = info.LoadedImageSurfaceNodes;
+            foreach (var n in loadedImageSurfaceNodes)
             {
-                builder.WriteLine($"internal {info.ClassName}(Compositor compositor)");
-                builder.OpenScope();
-                builder.WriteLine("_c = compositor;");
-                builder.WriteLine($"{info.AnimatedVisualSourceInfo.ReusableExpressionAnimationFieldName} = compositor.CreateExpressionAnimation();");
+                builder.WriteLine($"{n.FieldName} = {_s.CamelCase(n.Name)};");
             }
+
+            builder.WriteLine($"{info.AnimatedVisualSourceInfo.ReusableExpressionAnimationFieldName} = compositor.CreateExpressionAnimation();");
 
             builder.WriteLine("Root();");
             builder.CloseScope();
@@ -563,23 +607,31 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.WriteLine();
         }
 
+        IEnumerable<string> GetConstructorArguments(IAnimatedVisualInfo info)
+        {
+            yield return "compositor";
+
+            if (info.AnimatedVisualSourceInfo.IsThemed)
+            {
+                yield return info.AnimatedVisualSourceInfo.ThemePropertiesFieldName;
+            }
+
+            foreach (var loadedImageSurfaceNode in info.LoadedImageSurfaceNodes)
+            {
+                yield return loadedImageSurfaceNode.FieldName;
+            }
+        }
+
         void WriteInstantiateAndReturnAnimatedVisual(CodeBuilder builder, IAnimatedVisualInfo info)
         {
-            if (info.LoadedImageSurfaceNodes.Count > 0)
-            {
-                builder.WriteLine("return");
-                builder.Indent();
-                builder.WriteLine($"new {info.ClassName}(");
-                builder.Indent();
-                builder.WriteCommaSeparatedLines("compositor", info.LoadedImageSurfaceNodes.Select(n => n.FieldName));
-                builder.WriteLine(");");
-                builder.UnIndent();
-                builder.UnIndent();
-            }
-            else
-            {
-                builder.WriteLine($"return new {info.ClassName}(compositor);");
-            }
+            builder.WriteLine("return");
+            builder.Indent();
+            builder.WriteLine($"new {info.ClassName}(");
+            builder.Indent();
+            builder.WriteCommaSeparatedLines(GetConstructorArguments(info));
+            builder.WriteLine(");");
+            builder.UnIndent();
+            builder.UnIndent();
         }
 
         static string FieldAssignment(string fieldName) => fieldName != null ? $"{fieldName} = " : string.Empty;

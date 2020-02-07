@@ -17,7 +17,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
         readonly List<(string bindingName, PropertySetValueType actualType, PropertySetValueType exposedType)> _names =
             new List<(string bindingName, PropertySetValueType actualType, PropertySetValueType exposedType)>();
 
-        // Adds the current list of property bindings to the source metatadata dictionary.
+        // Adds the current list of property bindings to the source metadata dictionary.
         internal void AddToSourceMetadata(Dictionary<Guid, object> sourceMetadata)
         {
             if (_names.Count > 0)

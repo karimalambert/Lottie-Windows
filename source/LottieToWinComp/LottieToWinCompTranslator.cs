@@ -55,9 +55,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 #endif
     sealed class LottieToWinCompTranslator : IDisposable
     {
-        // The name used to bind to the property set that contains the Progress property.
-        const string RootName = "_";
-
         // Identifies the Lottie metadata in TranslationResult.SourceMetadata.
         static readonly Guid s_lottieMetadataKey = new Guid("EA3D6538-361A-4B1C-960D-50A6C35563A5");
 
@@ -87,6 +84,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
         readonly PropertyBindings _propertyBindings = new PropertyBindings();
 
         readonly uint _targetUapVersion;
+
+        // Property set used for property bindings for themed Lotties.
+        CompositionPropertySet _themePropertySet;
 
         /// <summary>
         /// The lowest UAP version for which the translator can produce code. Code from the translator
@@ -2827,15 +2827,18 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                 string bindingName,
                 Color defaultColor)
         {
+            // Create a theme property set if one hasn't been created yet.
+            var themeProperties = _themePropertySet ?? (_themePropertySet = _c.CreatePropertySet());
+
             // Insert a property set value for the color if one hasn't yet been added.
             // The color is inserted as a Vector4 to allow sub-channel animation because
             // WinComp Color expressions do not permit sub-channel animation. We used
             // sub-channel animation to manipulate the alpha channel.
-            switch (_rootVisual.Properties.TryGetVector4(bindingName, out _))
+            switch (themeProperties.TryGetVector4(bindingName, out _))
             {
                 case CompositionGetValueStatus.NotFound:
                     // The property hasn't been added yet. Add it.
-                    _rootVisual.Properties.InsertVector4(bindingName, Vector4(Color(defaultColor)));
+                    themeProperties.InsertVector4(bindingName, Vector4(Color(defaultColor)));
                     _propertyBindings.AddPropertyBinding(
                         bindingName,
                         actualType: PropertySetValueType.Vector4,
@@ -2856,7 +2859,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
             if (_addDescriptions)
             {
-                Describe(result, $"Color bound to root CompositionPropertySet value: {bindingName}", bindingName);
+                Describe(result, $"Color bound to theme property value: {bindingName}", bindingName);
 
                 // Name the brush with a name that includes the binding name. This will allow the code generator to
                 // give its factory a more meaningful name.
@@ -2879,9 +2882,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                 }
 
                 var opacityScalarExpressions = animatableOpacities.Select(a => Expr.Scalar($"my.{a.name}")).ToArray();
-                var anim = _c.CreateExpressionAnimation(BoundColorAsVector4MultipliedByOpacities(bindingName, opacityScalarExpressions));
+                var anim = _c.CreateExpressionAnimation(ThemedColorAsVector4MultipliedByOpacities(bindingName, opacityScalarExpressions));
                 anim.SetReferenceParameter("my", result.Properties);
-                anim.SetReferenceParameter(RootName, _rootVisual);
+                anim.SetReferenceParameter(ThemePropertiesName, themeProperties);
 
                 StartExpressionAnimation(result, nameof(result.Color), anim);
                 return result;
@@ -2889,8 +2892,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             else
             {
                 // Opacity isn't animated. Multiply the alpha channel of the color by the non-animated opacity value.
-                var anim = _c.CreateExpressionAnimation(BoundColorMultipliedByOpacity(bindingName, opacity.NonAnimatedValue));
-                anim.SetReferenceParameter(RootName, _rootVisual);
+                var anim = _c.CreateExpressionAnimation(ThemedColorMultipliedByOpacity(bindingName, opacity.NonAnimatedValue));
+                anim.SetReferenceParameter(ThemePropertiesName, themeProperties);
                 StartExpressionAnimation(result, nameof(result.Color), anim);
                 return result;
             }

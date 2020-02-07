@@ -22,7 +22,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData
 
         readonly ListOfNeverNull<Animator> _animators = new ListOfNeverNull<Animator>();
 
-        // Null until the first metatadata is set.
+        // Null until the first metadata is set.
         SortedDictionary<Guid, object> _metadata;
 
         private protected CompositionObject()

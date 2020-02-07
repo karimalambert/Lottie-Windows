@@ -84,13 +84,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         // Generates the .h file contents.
         string GenerateHeaderText(string className, IAnimatedVisualSourceInfo info)
         {
-            var loadedImageSurfacesInfo = info.LoadedImageSurfaces;
-
             // Returns the header text that implements IAnimatedVisualSource if loadedImageSurfacesNodes is null or empty.
             // Otherwise, return the header text that implements IDynamicAnimatedVisualSource.
-            return !loadedImageSurfacesInfo.Any()
-                ? IAnimatedVisualSourceHeaderText(className)
-                : IDynamicAnimatedVisualSourceHeaderText(className, loadedImageSurfacesInfo);
+            return info.LoadedImageSurfaces.Any()
+                ? IDynamicAnimatedVisualSourceHeaderText(className, info)
+                : IAnimatedVisualSourceHeaderText(className, info);
         }
 
         /// <inheritdoc/>
@@ -236,6 +234,21 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             }
         }
 
+        IEnumerable<string> GetConstructorParameters(IAnimatedVisualInfo info)
+        {
+            yield return "Compositor^ compositor";
+
+            if (info.AnimatedVisualSourceInfo.IsThemed)
+            {
+                yield return "CompositionPropertySet^ themeProperties";
+            }
+
+            foreach (var loadedImageSurfaceNode in info.LoadedImageSurfaceNodes)
+            {
+                yield return $"{_s.ReferenceTypeName(loadedImageSurfaceNode.TypeName)} {_s.CamelCase(loadedImageSurfaceNode.Name)}";
+            }
+        }
+
         /// <inheritdoc/>
         // Called by the base class to write the end of the AnimatedVisual class.
         protected override void WriteAnimatedVisualEnd(
@@ -269,39 +282,28 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.WriteLine("public:");
             builder.Indent();
 
-            if (info.LoadedImageSurfaceNodes.Count > 0)
+            builder.WriteLine($"{info.ClassName}(");
+            builder.Indent();
+            builder.WriteCommaSeparatedLines(GetConstructorParameters(info));
+
+            // Initializer list.
+            builder.WriteLine(") : _c(compositor)");
+
+            if (info.AnimatedVisualSourceInfo.IsThemed)
             {
-                builder.WriteLine($"{info.ClassName}(");
-                builder.Indent();
-                builder.WriteCommaSeparatedLines("Compositor^ compositor", info.LoadedImageSurfaceNodes.Select(n => $"{_s.ReferenceTypeName(n.TypeName)} {_s.CamelCase(n.Name)}"));
-
-                // Initializer list.
-                builder.WriteLine(") : _c(compositor)");
-
-                // Instantiate the reusable ExpressionAnimation.
-                builder.WriteLine($", {info.AnimatedVisualSourceInfo.ReusableExpressionAnimationFieldName}(compositor->CreateExpressionAnimation())");
-
-                // Initialize the image surfaces.
-                var nodes = info.LoadedImageSurfaceNodes;
-                foreach (var n in nodes)
-                {
-                    builder.WriteLine($", {n.FieldName}({_s.CamelCase(n.Name)})");
-                }
-
-                builder.UnIndent();
+                builder.WriteLine($", {info.AnimatedVisualSourceInfo.ThemePropertiesFieldName}(themeProperties)");
             }
-            else
+
+            // Initialize the image surfaces.
+            foreach (var n in info.LoadedImageSurfaceNodes)
             {
-                builder.WriteLine($"{info.ClassName}(Compositor^ compositor)");
-
-                // Initializer list.
-                builder.Indent();
-                builder.WriteLine(": _c(compositor)");
-
-                // Instantiate the reusable ExpressionAnimation.
-                builder.WriteLine($", {info.AnimatedVisualSourceInfo.ReusableExpressionAnimationFieldName}(compositor->CreateExpressionAnimation())");
-                builder.UnIndent();
+                builder.WriteLine($", {n.FieldName}({_s.CamelCase(n.Name)})");
             }
+
+            // Instantiate the reusable ExpressionAnimation.
+            builder.WriteLine($", {info.AnimatedVisualSourceInfo.ReusableExpressionAnimationFieldName}(compositor->CreateExpressionAnimation())");
+
+            builder.UnIndent();
 
             builder.OpenScope();
             if (info.AnimatedVisualSourceInfo.UsesCanvasEffects ||
@@ -364,6 +366,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.WriteLine("Object^* diagnostics)");
             builder.UnIndent();
             builder.OpenScope();
+
+            if (info.IsThemed)
+            {
+                builder.WriteLine("EnsureThemeProperties(compositor);");
+            }
 
             if (info.LoadedImageSurfaces.Count > 0)
             {
@@ -634,7 +641,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             foreach (var n in info.LoadedImageSurfaces)
             {
-                var imageMemberName = MakeFieldName(n.Name);
+                var imageMemberName = n.FieldName;
                 switch (n.LoadedImageSurfaceType)
                 {
                     case LoadedImageSurface.LoadedImageSurfaceType.FromStream:
@@ -688,23 +695,31 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.WriteLine();
         }
 
+        IEnumerable<string> GetConstructorArguments(IAnimatedVisualInfo info)
+        {
+            yield return "compositor";
+
+            if (info.AnimatedVisualSourceInfo.IsThemed)
+            {
+                yield return info.AnimatedVisualSourceInfo.ThemePropertiesFieldName;
+            }
+
+            foreach (var loadedImageSurfaceNode in info.LoadedImageSurfaceNodes)
+            {
+                yield return loadedImageSurfaceNode.FieldName;
+            }
+        }
+
         void WriteInstantiateAndReturnAnimatedVisual(CodeBuilder builder, IAnimatedVisualInfo info)
         {
-            if (info.LoadedImageSurfaceNodes.Count > 0)
-            {
-                builder.WriteLine("return");
-                builder.Indent();
-                builder.WriteLine($"ref new {info.ClassName}(");
-                builder.Indent();
-                builder.WriteCommaSeparatedLines("compositor", info.LoadedImageSurfaceNodes.Select(n => MakeFieldName(n.Name)));
-                builder.WriteLine(");");
-                builder.UnIndent();
-                builder.UnIndent();
-            }
-            else
-            {
-                builder.WriteLine($"return ref new {info.ClassName}(compositor);");
-            }
+            builder.WriteLine("return");
+            builder.Indent();
+            builder.WriteLine($"ref new {info.ClassName}(");
+            builder.Indent();
+            builder.WriteCommaSeparatedLines(GetConstructorArguments(info));
+            builder.WriteLine(");");
+            builder.UnIndent();
+            builder.UnIndent();
         }
 
         string CanvasFigureLoop(CanvasFigureLoop value) => _s.CanvasFigureLoop(value);
@@ -721,15 +736,18 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         string Vector2(Vector2 value) => _s.Vector2(value);
 
-        string MakeFieldName(string value) => $"m_{_s.CamelCase(value)}";
-
         static string CommonHeaderText => "#pragma once\r\n" + string.Join("\r\n", AutoGeneratedHeaderText);
 
-        string IAnimatedVisualSourceHeaderText(string className)
+        string IAnimatedVisualSourceHeaderText(string className, IAnimatedVisualSourceInfo info)
         {
             var metadataComments =
                 GetSourceDescriptionLines().Any()
                     ? "\r\n// " + string.Join("\r\n// ", GetSourceDescriptionLines())
+                    : string.Empty;
+
+            var themePropertiesField =
+                info.IsThemed
+                    ? "\r\n    CompositionPropertySet^ _themeProperties{};"
                     : string.Empty;
 
             return
@@ -738,7 +756,7 @@ $@"{CommonHeaderText}
 namespace AnimatedVisuals 
 {{{metadataComments}
 public ref class {className} sealed : public Microsoft::UI::Xaml::Controls::IAnimatedVisualSource
-{{
+{{{themePropertiesField}
 public:
     virtual Microsoft::UI::Xaml::Controls::IAnimatedVisual^ TryCreateAnimatedVisual(
         Windows::UI::Composition::Compositor^ compositor,
@@ -747,19 +765,24 @@ public:
 }}";
         }
 
-        string IDynamicAnimatedVisualSourceHeaderText(string className, IEnumerable<LoadedImageSurfaceInfo> loadedImageSurfaceInfo)
+        string IDynamicAnimatedVisualSourceHeaderText(string className, IAnimatedVisualSourceInfo info)
         {
             var metadataComments =
                 GetSourceDescriptionLines().Any()
                     ? "\r\n// " + string.Join("\r\n// ", GetSourceDescriptionLines())
                     : string.Empty;
 
-            var nodes = loadedImageSurfaceInfo.ToArray();
+            var themePropertiesField =
+                info.IsThemed
+                    ? "\r\n    CompositionPropertySet^ _themeProperties{};"
+                    : string.Empty;
+
+            var loadedImageSurfaceNodes = info.LoadedImageSurfaces.ToArray();
             var imageFieldsText = new StringBuilder();
 
-            foreach (var n in nodes)
+            foreach (var n in loadedImageSurfaceNodes)
             {
-                imageFieldsText.AppendLine($"    {_s.ReferenceTypeName(n.TypeName)} {MakeFieldName(n.Name)}{{}};");
+                imageFieldsText.AppendLine($"    {_s.ReferenceTypeName(n.TypeName)} {n.FieldName}{{}};");
             }
 
             return
@@ -773,7 +796,7 @@ using namespace Windows::UI::Xaml::Media;
 namespace AnimatedVisuals
 {{{metadataComments}
 public ref class {className} sealed : public IDynamicAnimatedVisualSource, INotifyPropertyChanged
-{{
+{{{themePropertiesField}
 public:
     virtual event Windows::Foundation::TypedEventHandler<IDynamicAnimatedVisualSource^, Platform::Object^>^ AnimatedVisualInvalidated
     {{
@@ -824,7 +847,7 @@ public:
     }}
 
 private:
-    const int c_loadedImageSurfaceCount = {loadedImageSurfaceInfo.Distinct().Count()};
+    const int c_loadedImageSurfaceCount = {info.LoadedImageSurfaces.Distinct().Count()};
     double m_imageSuccessfulLoadingProgress{{}};
     int m_loadCompleteEventCount{{}};
     bool m_isAnimatedVisualSourceDynamic{{ true }};

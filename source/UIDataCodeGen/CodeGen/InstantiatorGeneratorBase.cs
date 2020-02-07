@@ -29,6 +29,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         // The name of the field holding the singleton reusable ExpressionAnimation.
         const string SingletonExpressionAnimationName = "_reusableExpressionAnimation";
 
+        // The name of the field holding the theme properties.
+        const string ThemePropertiesFieldName = "_themeProperties";
+
         // The name of the constant holding the duration of the animation in ticks.
         const string DurationTicksFieldName = "c_durationTicks";
 
@@ -55,6 +58,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         readonly LoadedImageSurfaceInfo[] _loadedImageSurfaceInfos;
         readonly Dictionary<ObjectData, LoadedImageSurfaceInfo> _loadedImageSurfaceInfosByNode;
         readonly SourceMetadata _sourceMetadata;
+        readonly CompositionPropertySet _themeProperties;
         AnimatedVisualGenerator _currentAnimatedVisualGenerator;
 
         protected InstantiatorGeneratorBase(
@@ -76,6 +80,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             _stringifier = stringifier;
 
             _animatedVisualGenerators = graphs.Select(g => new AnimatedVisualGenerator(this, className, g.graphRoot, g.requiredUapVersion)).ToArray();
+
+            // The theme properties should be equivalent for each animated visual, so just
+            // get them from the first animated visual.
+            _themeProperties = _animatedVisualGenerators.First().GetThemeProperties();
 
             // Deal with the nodes that are shared between multiple AnimatedVisual classes.
             // The nodes need naming, and some other adjustments.
@@ -291,6 +299,25 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         protected void WriteBytesField(CodeBuilder builder, string fieldName)
         {
             builder.WriteLine($"{_stringifier.Static} {_stringifier.Readonly(_stringifier.ReferenceTypeName(_stringifier.ByteArray))} {fieldName} = {_stringifier.New} {_stringifier.ByteArray}");
+        }
+
+        /// <summary>
+        /// Writes code that initializes the properties in the theme CompositionPropertySet.
+        /// </summary>
+        /// <param name="builder">A <see cref="CodeBuilder"/> used to create the code.</param>
+        /// <param name="variableName">The variable holding the property set.</param>
+        protected void WriteThemePropertySetInitialization(CodeBuilder builder, string variableName)
+        {
+            WritePropertySetInitialization(builder, _themeProperties, variableName);
+        }
+
+        void WritePropertySetInitialization(CodeBuilder builder, CompositionPropertySet propertySet, string variableName)
+        {
+            foreach (var (name, type) in propertySet.Names)
+            {
+                var valueInitializer = PropertySetValueInitializer(propertySet, name, type);
+                builder.WriteLine($"{variableName}{Deref}Insert{PropertySetValueType(type)}({String(name)}, {valueInitializer});");
+            }
         }
 
         /// <summary>
@@ -559,6 +586,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         string IAnimatedVisualSourceInfo.ReusableExpressionAnimationFieldName => SingletonExpressionAnimationName;
 
         string IAnimatedVisualSourceInfo.DurationTicksFieldName => DurationTicksFieldName;
+
+        string IAnimatedVisualSourceInfo.ThemePropertiesFieldName => ThemePropertiesFieldName;
+
+        bool IAnimatedVisualSourceInfo.IsThemed => _themeProperties != null;
 
         Vector2 IAnimatedVisualSourceInfo.CompositionDeclaredSize => _compositionDeclaredSize;
 
@@ -914,18 +945,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                         // Node is referenced more than once so it requires storage.
                         if (node.Object is CompositionPropertySet propertySet)
                         {
-                            // The node is a ComositionPropertySet. Rather than storing
+                            // The node is a CompositionPropertySet. Rather than storing
                             // it, store the owner of the CompositionPropertySet. The
                             // CompositionPropertySet can be reached from its owner.
-                            var propertySetOwner = NodeFor(propertySet.Owner);
-                            if (propertySetOwner != null)
+                            if (propertySet.Owner != null)
                             {
+                                var propertySetOwner = NodeFor(propertySet.Owner);
                                 propertySetOwner.RequiresStorage = true;
-                            }
-                            else
-                            {
-                                // It's an un-owned CompositionPropertySet.
-                                node.RequiresStorage = true;
                             }
                         }
                         else
@@ -949,6 +975,17 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             // Returns the nodes that can be shared between multiple IAnimatedVisuals.
             internal IEnumerable<ObjectData> GetShareableNodes() => _nodes.Where(n => n.IsShareableNode);
+
+            // Returns the node for the theme property set, if any.
+            internal CompositionPropertySet GetThemeProperties()
+            {
+                // The theme property set is the only un-owned CompositionPropertySet.
+                return
+                    (from n in _objectGraph.CompositionObjectNodes
+                     let obj = n.Object as CompositionPropertySet
+                     where obj != null && obj.Owner is null
+                     select obj).FirstOrDefault();
+            }
 
             /// <summary>
             /// Gets a list of the <see cref="LoadedImageSurfaceInfo"/> representing the LoadedImageSurface of the AnimatedVisual and its properties.
@@ -1309,6 +1346,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 // Write read-only fields first.
                 WriteField(builder, Readonly(_stringifier.ReferenceTypeName("Compositor")), "_c");
                 WriteField(builder, Readonly(_stringifier.ReferenceTypeName("ExpressionAnimation")), SingletonExpressionAnimationName);
+
+                if (_owner._themeProperties != null)
+                {
+                    WriteField(builder, Readonly(_stringifier.ReferenceTypeName("CompositionPropertySet")), ThemePropertiesFieldName);
+                }
 
                 WriteFields(builder);
 
@@ -1814,32 +1856,35 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 ObjectData animationNode,
                 KeyValuePair<string, CompositionObject> referenceParameter)
             {
-                string referenceParameterName;
                 if (referenceParameter.Value == obj)
                 {
-                    referenceParameterName = localName;
+                    return localName;
                 }
-                else if (referenceParameter.Value.Type == CompositionObjectType.CompositionPropertySet)
+
+                if (referenceParameter.Value.Type == CompositionObjectType.CompositionPropertySet)
                 {
                     var propSet = (CompositionPropertySet)referenceParameter.Value;
                     var propSetOwner = propSet.Owner;
                     if (propSetOwner == obj)
                     {
                         // Use the name of the local that is holding the property set.
-                        referenceParameterName = "propertySet";
+                        return "propertySet";
                     }
-                    else
+
+                    if (propSetOwner is null)
                     {
-                        // Get the factory for the owner of the property set, and get the Properties object from it.
-                        referenceParameterName = CallFactoryFromFor(animationNode, propSetOwner);
+                        // It's an unowned property set. Currently these are:
+                        // * only used for themes.
+                        // * placed in a field by the constructor of the IAnimatedVisual.
+                        Debug.Assert(_owner._themeProperties != null, "Precondition");
+                        return ThemePropertiesFieldName;
                     }
-                }
-                else
-                {
-                    referenceParameterName = CallFactoryFromFor(animationNode, referenceParameter.Value);
+
+                    // Get the factory for the owner of the property set, and get the Properties object from it.
+                    return CallFactoryFromFor(animationNode, propSetOwner);
                 }
 
-                return referenceParameterName;
+                return CallFactoryFromFor(animationNode, referenceParameter.Value);
             }
 
             void InitializeCompositionObject(CodeBuilder builder, CompositionObject obj, ObjectData node, string localName = "result")
@@ -1857,11 +1902,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 if (propertySet.Names.Count > 0)
                 {
                     builder.WriteLine($"{Var} propertySet = {localName}{Deref}Properties;");
-                    foreach (var (name, type) in propertySet.Names)
-                    {
-                        var valueInitializer = _owner.PropertySetValueInitializer(propertySet, name, type);
-                        builder.WriteLine($"propertySet{Deref}Insert{PropertySetValueType(type)}({String(name)}, {valueInitializer});");
-                    }
+                    _owner.WritePropertySetInitialization(builder, propertySet, "propertySet");
                 }
             }
 

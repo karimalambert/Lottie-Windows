@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using System.Collections.Generic;
 using System.Numerics;
 
@@ -30,6 +29,16 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         /// Gets the constant holding the duration of the composition in ticks.
         /// </summary>
         string DurationTicksFieldName { get; }
+
+        /// <summary>
+        /// Gets the name of the field holding the theme properties CompositionPropertySet.
+        /// </summary>
+        string ThemePropertiesFieldName { get; }
+
+        /// <summary>
+        /// Gets a value indicating whether or not the animated visual is themed.
+        /// </summary>
+        bool IsThemed { get; }
 
         /// <summary>
         /// Gets the declared size of the composition.
