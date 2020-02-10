@@ -95,7 +95,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             WriteLine("}");
         }
 
-        internal void CloseCppClassScope()
+        internal void CloseCppTypeScope()
         {
             UnIndent();
             WriteLine("};");
