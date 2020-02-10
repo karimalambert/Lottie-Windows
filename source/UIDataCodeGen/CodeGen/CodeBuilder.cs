@@ -15,6 +15,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
     sealed class CodeBuilder
     {
         const int IndentSize = 4;
+        const int LineBreakWidth = 83;
         readonly List<CodeLine> _lines = new List<CodeLine>();
         int _indentCount = 0;
 
@@ -28,6 +29,29 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         internal void WriteLine(string line)
         {
             _lines.Add(new CodeLine { Text = line, IndentCount = _indentCount });
+        }
+
+        // Writes a line, or multiple lines if the line would be too long as a single line.
+        // Typically used for writing method calls and signature.
+        internal void WriteBreakableLine(string prefix, string[] breakableParts, string postfix)
+        {
+            // See if the content fits on a single line.
+            if (prefix.Length + breakableParts.Sum(s => s.Length) + postfix.Length <= LineBreakWidth)
+            {
+                WriteLine($"{prefix}{string.Join(' ', breakableParts)}{postfix}");
+            }
+            else
+            {
+                WriteLine(prefix.TrimEnd());
+                Indent();
+                for (var i = 0; i < breakableParts.Length - 1; i++)
+                {
+                    WriteLine(breakableParts[i]);
+                }
+
+                WriteLine($"{breakableParts[breakableParts.Length - 1]}{postfix.TrimStart()}");
+                UnIndent();
+            }
         }
 
         internal void WriteCommaSeparatedLines(string initialItem, IEnumerable<string> remainingItems)
@@ -152,7 +176,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         }
 
         // Breaks up the given text into lines.
-        static IEnumerable<string> BreakUpLine(string text) => BreakUpLine(text, 83);
+        static IEnumerable<string> BreakUpLine(string text) => BreakUpLine(text, LineBreakWidth);
 
         // Breaks up the given text into lines of at most maxLineLength characters.
         static IEnumerable<string> BreakUpLine(string text, int maxLineLength)
