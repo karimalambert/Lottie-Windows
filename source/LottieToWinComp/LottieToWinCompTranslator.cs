@@ -2863,7 +2863,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
                 // Name the brush with a name that includes the binding name. This will allow the code generator to
                 // give its factory a more meaningful name.
-                Name(result, $"BoundColor_{bindingName}");
+                Name(result, $"ThemeColor_{bindingName}");
             }
 
             if (opacity.IsAnimated)

@@ -40,6 +40,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         public string Const(string value) => $"const {value}";
 
+        // A constant - in C# this is just a const. In C++ this is a static constexpr.
+        public virtual string ConstExprField(string type, string name, string value) => $"const {type} {name} = {value};";
+
+        public virtual string PropertyGet(string target, string propertyName) => $"{target}{Deref}{propertyName}";
+
+        public virtual string PropertySet(string target, string propertyName, string value) => $"{target}{Deref}{propertyName} = {value}";
+
         public virtual string Readonly(string value) => $"readonly {value}";
 
         public virtual string FieldName(string value) => $"_{CamelCase(value)}";

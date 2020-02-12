@@ -14,6 +14,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
     /// </summary>
     sealed class CppStringifier : Stringifier
     {
+        readonly bool _isWinrtcppMode;
+
+        internal CppStringifier(bool isWinrtcppMode)
+        {
+            _isWinrtcppMode = isWinrtcppMode;
+        }
+
         public override string CanvasFigureLoop(Mgcg.CanvasFigureLoop value)
         {
             switch (value)
@@ -47,6 +54,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         public override string Color(Color value) => $"ColorHelper::FromArgb({Hex(value.A)}, {Hex(value.R)}, {Hex(value.G)}, {Hex(value.B)})";
 
         public override string Deref => "->";
+
+        public override string PropertySet(string target, string propertyName, string value)
+            => _isWinrtcppMode
+                ? $"{target}.{propertyName}({value})"
+                : base.PropertySet(target, propertyName, value);
 
         public override string FilledRegionDetermination(Mgcg.CanvasFilledRegionDetermination value)
         {
@@ -83,10 +95,23 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         public override string Readonly(string value) => $"{value} const";
 
-        public override string ReferenceTypeName(string value) =>
-            value == "CanvasGeometry"
-                ? "CanvasGeometry" // CanvasGeometry is a typedef for ComPtr<GeoSource>, thus no hat pointer.
-                : $"{value}^";
+        public override string ConstExprField(string type, string name, string value) => $"static constexpr {type} {name}{{{value}}};";
+
+        public override string ReferenceTypeName(string value)
+        {
+            if (_isWinrtcppMode)
+            {
+                return value == "CanvasGeometry"
+                    ? "CanvasGeometry" // CanvasGeometry is a typedef for ComPtr<GeoSource>, thus no hat pointer.
+                    : $"winrt::{value}";
+            }
+            else
+            {
+                return value == "CanvasGeometry"
+                    ? "CanvasGeometry" // CanvasGeometry is a typedef for ComPtr<GeoSource>, thus no hat pointer.
+                    : $"{value}^";
+            }
+        }
 
         public override string TimeSpan(TimeSpan value) => TimeSpan(Int64(value.Ticks));
 

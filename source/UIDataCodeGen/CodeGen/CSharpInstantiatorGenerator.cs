@@ -154,7 +154,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.WriteLine($"sealed class {info.ClassName} : IAnimatedVisualSource");
             if (info.IsThemed)
             {
-                builder.WriteLine(", IThemedAnimatedVisual");
+                builder.WriteLine(", IThemedAnimatedVisualSource");
             }
 
             builder.OpenScope();
