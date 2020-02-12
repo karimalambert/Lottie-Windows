@@ -1021,9 +1021,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             internal bool UsesCompositeEffect => _nodes.Where(n => n.UsesCompositeEffect).Any();
 
-            string ScopeResolve => _stringifier.ScopeResolve;
-
-            string Const(string value) => _stringifier.Const(value);
+            string ConstExprField(string type, string name, string value) => _stringifier.ConstExprField(type, name, value);
 
             string Deref => _stringifier.Deref;
 
@@ -1291,11 +1289,49 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 builder.UnIndent();
                 builder.OpenScope();
                 builder.WriteLine($"{SingletonExpressionAnimationName}{Deref}ClearAllParameters();");
-                builder.WriteLine($"{SingletonExpressionAnimationName}{Deref}Expression = expression;");
+                WritePropertySetStatement(builder, SingletonExpressionAnimationName, "Expression", "expression");
                 builder.WriteLine($"{SingletonExpressionAnimationName}{Deref}SetReferenceParameter(referenceParameterName, referencedObject);");
                 builder.WriteLine($"target{Deref}StartAnimation(animatedPropertyName, {SingletonExpressionAnimationName});");
                 builder.CloseScope();
                 builder.WriteLine();
+            }
+
+            void WriteBoolPropertySetStatement(CodeBuilder builder, string target, string propertyName, bool value)
+                => WritePropertySetStatement(builder, target, propertyName, Bool(value));
+
+            void WriteFloatPropertySetStatement(CodeBuilder builder, string target, string propertyName, float value)
+                 => WritePropertySetStatement(builder, target, propertyName, Float(value));
+
+            void WriteFloatPropertySetStatement(CodeBuilder builder, string target, string propertyName, float? value)
+            {
+                if (value.HasValue)
+                {
+                    WritePropertySetStatement(builder, target, propertyName, Float(value.Value));
+                }
+            }
+
+            void WriteVector2PropertySetStatement(CodeBuilder builder, string target, string propertyName, Vector2 value)
+                 => WritePropertySetStatement(builder, target, propertyName, Vector2(value));
+
+            void WriteVector2PropertySetStatement(CodeBuilder builder, string target, string propertyName, Vector2? value)
+            {
+                if (value.HasValue)
+                {
+                    WritePropertySetStatement(builder, target, propertyName, Vector2(value.Value));
+                }
+            }
+
+            void WriteVector3PropertySetStatement(CodeBuilder builder, string target, string propertyName, Vector3? value)
+            {
+                if (value.HasValue)
+                {
+                    WritePropertySetStatement(builder, target, propertyName, Vector3(value.Value));
+                }
+            }
+
+            void WritePropertySetStatement(CodeBuilder builder, string target, string propertyName, string value)
+            {
+                builder.WriteLine($"{_stringifier.PropertySet(target, propertyName, value)};");
             }
 
             void WritePopulateShapesCollection(CodeBuilder builder, IList<CompositionShape> shapes, ObjectData node)
@@ -1339,10 +1375,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 // Write fields for constant values.
                 builder.WriteComment($"Animation duration: {_owner._compositionDuration.Ticks / (double)System.TimeSpan.TicksPerSecond,-1:N3} seconds.");
-                WriteField(builder, Const(_stringifier.Int64TypeName), $"{DurationTicksFieldName} = {_stringifier.Int64(_owner._compositionDuration.Ticks)}");
+                builder.WriteLine(ConstExprField(_stringifier.Int64TypeName, DurationTicksFieldName, $"{_stringifier.Int64(_owner._compositionDuration.Ticks)}"));
 
-                // Write fields for each object that needs storage (i.e. objects that are
-                // referenced more than once).
+                // Write fields for each object that needs storage (i.e. objects that are referenced more than once).
                 // Write read-only fields first.
                 WriteField(builder, Readonly(_stringifier.ReferenceTypeName("Compositor")), "_c");
                 WriteField(builder, Readonly(_stringifier.ReferenceTypeName("ExpressionAnimation")), SingletonExpressionAnimationName);
@@ -1532,22 +1567,22 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 if (obj.LeftInset != 0)
                 {
-                    builder.WriteLine($"result{Deref}LeftInset = {Float(obj.LeftInset)}");
+                    WriteFloatPropertySetStatement(builder, "result", "LeftInset", obj.LeftInset);
                 }
 
                 if (obj.RightInset != 0)
                 {
-                    builder.WriteLine($"result{Deref}RightInset = {Float(obj.RightInset)}");
+                    WriteFloatPropertySetStatement(builder, "result", "RightInset", obj.RightInset);
                 }
 
                 if (obj.TopInset != 0)
                 {
-                    builder.WriteLine($"result{Deref}TopInset = {Float(obj.TopInset)}");
+                    WriteFloatPropertySetStatement(builder, "result", "TopInset", obj.TopInset);
                 }
 
                 if (obj.BottomInset != 0)
                 {
-                    builder.WriteLine($"result{Deref}BottomInset = {Float(obj.BottomInset)}");
+                    WriteFloatPropertySetStatement(builder, "result", "BottomInset", obj.BottomInset);
                 }
 
                 StartAnimationsOnResult(builder, obj, node);
@@ -1563,7 +1598,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 if (obj.Geometry != null)
                 {
-                    builder.WriteLine($"result{Deref}Geometry = {CallFactoryFromFor(node, obj.Geometry)};");
+                    WritePropertySetStatement(builder, "result", "Geometry", CallFactoryFromFor(node, obj.Geometry));
                 }
 
                 StartAnimationsOnResult(builder, obj, node);
@@ -1577,14 +1612,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 WriteCreateAssignment(builder, node, $"_c{Deref}CreateLinearGradientBrush()");
                 InitializeCompositionGradientBrush(builder, obj, node);
 
-                if (obj.StartPoint.HasValue)
-                {
-                    builder.WriteLine($"result{Deref}StartPoint = {Vector2(obj.StartPoint.Value)};");
-                }
+                WriteVector2PropertySetStatement(builder, "result", "StartPoint", obj.StartPoint);
 
                 if (obj.EndPoint.HasValue)
                 {
-                    builder.WriteLine($"result{Deref}EndPoint = {Vector2(obj.EndPoint.Value)};");
+                    WriteVector2PropertySetStatement(builder, "result", "EndPoint", obj.EndPoint);
                 }
 
                 StartAnimationsOnResult(builder, obj, node);
@@ -1598,20 +1630,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 WriteCreateAssignment(builder, node, $"_c{Deref}CreateRadialGradientBrush()");
                 InitializeCompositionGradientBrush(builder, obj, node);
 
-                if (obj.EllipseCenter.HasValue)
-                {
-                    builder.WriteLine($"result{Deref}EllipseCenter = {Vector2(obj.EllipseCenter.Value)};");
-                }
-
-                if (obj.EllipseRadius.HasValue)
-                {
-                    builder.WriteLine($"result{Deref}EllipseRadius = {Vector2(obj.EllipseRadius.Value)};");
-                }
-
-                if (obj.GradientOriginOffset.HasValue)
-                {
-                    builder.WriteLine($"result{Deref}GradientOriginOffset = {Vector2(obj.GradientOriginOffset.Value)};");
-                }
+                WriteVector2PropertySetStatement(builder, "result", "EllipseCenter", obj.EllipseCenter);
+                WriteVector2PropertySetStatement(builder, "result", "EllipseRadius", obj.EllipseRadius);
+                WriteVector2PropertySetStatement(builder, "result", "GradientOriginOffset", obj.GradientOriginOffset);
 
                 StartAnimationsOnResult(builder, obj, node);
                 WriteObjectFactoryEnd(builder);
@@ -1637,27 +1658,27 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 if (obj.FinalStep != 1)
                 {
-                    builder.WriteLine($"result{Deref}FinalStep = {Int(obj.FinalStep)};");
+                    WritePropertySetStatement(builder, "result", "FinalStep", Int(obj.FinalStep));
                 }
 
                 if (obj.InitialStep != 0)
                 {
-                    builder.WriteLine($"result{Deref}InitialStep = {Int(obj.InitialStep)};");
+                    WritePropertySetStatement(builder, "result", "InitialStep", Int(obj.InitialStep));
                 }
 
                 if (obj.IsFinalStepSingleFrame)
                 {
-                    builder.WriteLine($"result{Deref}IsFinalStepSingleFrame  = {Bool(obj.IsFinalStepSingleFrame)};");
+                    WriteBoolPropertySetStatement(builder, "result", "IsFinalStepSingleFrame", obj.IsFinalStepSingleFrame);
                 }
 
                 if (obj.IsInitialStepSingleFrame)
                 {
-                    builder.WriteLine($"result{Deref}IsInitialStepSingleFrame  = {Bool(obj.IsInitialStepSingleFrame)};");
+                    WriteBoolPropertySetStatement(builder, "result", "IsInitialStepSingleFrame", obj.IsInitialStepSingleFrame);
                 }
 
                 if (obj.StepCount != 1)
                 {
-                    builder.WriteLine($"result{Deref}StepCount = {Int(obj.StepCount)};");
+                    WritePropertySetStatement(builder, "result", "StepCount", Int(obj.StepCount));
                 }
 
                 WriteObjectFactoryEnd(builder);
@@ -1893,7 +1914,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 {
                     if (!string.IsNullOrWhiteSpace(obj.Comment))
                     {
-                        builder.WriteLine($"{localName}{Deref}Comment = {String(obj.Comment)};");
+                        WritePropertySetStatement(builder, localName, "Comment", String(obj.Comment));
                     }
                 }
 
@@ -1901,7 +1922,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 if (propertySet.Names.Count > 0)
                 {
-                    builder.WriteLine($"{Var} propertySet = {localName}{Deref}Properties;");
+                    builder.WriteLine($"{Var} propertySet = {_stringifier.PropertyGet(localName, "Properties")};");
                     _owner.WritePropertySetInitialization(builder, propertySet, "propertySet");
                 }
             }
@@ -1917,52 +1938,26 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 if (obj.BorderMode.HasValue)
                 {
-                    builder.WriteLine($"result{Deref}BorderMode = {BorderMode(obj.BorderMode.Value)};");
+                    WritePropertySetStatement(builder, "result", "BorderMode", BorderMode(obj.BorderMode.Value));
                 }
 
-                if (obj.CenterPoint.HasValue)
-                {
-                    builder.WriteLine($"result{Deref}CenterPoint = {Vector3(obj.CenterPoint.Value)};");
-                }
+                WriteVector3PropertySetStatement(builder, "result", "CenterPoint", obj.CenterPoint);
 
                 if (obj.Clip != null)
                 {
-                    builder.WriteLine($"result{Deref}Clip = {CallFactoryFromFor(node, obj.Clip)};");
+                    WritePropertySetStatement(builder, "result", "Clip", CallFactoryFromFor(node, obj.Clip));
                 }
 
-                if (obj.Offset.HasValue)
-                {
-                    builder.WriteLine($"result{Deref}Offset = {Vector3(obj.Offset.Value)};");
-                }
-
-                if (obj.Opacity.HasValue)
-                {
-                    builder.WriteLine($"result{Deref}Opacity = {Float(obj.Opacity.Value)};");
-                }
-
-                if (obj.RotationAngleInDegrees.HasValue)
-                {
-                    builder.WriteLine($"result{Deref}RotationAngleInDegrees = {Float(obj.RotationAngleInDegrees.Value)};");
-                }
-
-                if (obj.RotationAxis.HasValue)
-                {
-                    builder.WriteLine($"result{Deref}RotationAxis = {Vector3(obj.RotationAxis.Value)};");
-                }
-
-                if (obj.Scale.HasValue)
-                {
-                    builder.WriteLine($"result{Deref}Scale = {Vector3(obj.Scale.Value)};");
-                }
-
-                if (obj.Size.HasValue)
-                {
-                    builder.WriteLine($"result{Deref}Size = {Vector2(obj.Size.Value)};");
-                }
+                WriteVector3PropertySetStatement(builder, "result", "Offset", obj.Offset);
+                WriteFloatPropertySetStatement(builder, "result", "Opacity", obj.Opacity);
+                WriteFloatPropertySetStatement(builder, "result", "RotationAngleInDegrees", obj.RotationAngleInDegrees);
+                WriteVector3PropertySetStatement(builder, "result", "RotationAxis", obj.RotationAxis);
+                WriteVector3PropertySetStatement(builder, "result", "Scale", obj.Scale);
+                WriteVector2PropertySetStatement(builder, "result", "Size", obj.Size);
 
                 if (obj.TransformMatrix.HasValue)
                 {
-                    builder.WriteLine($"result{Deref}TransformMatrix = {Matrix4x4(obj.TransformMatrix.Value)};");
+                    WritePropertySetStatement(builder, "result", "TransformMatrix", Matrix4x4(obj.TransformMatrix.Value));
                 }
             }
 
@@ -1972,27 +1967,21 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 if (obj.CenterPoint.X != 0 || obj.CenterPoint.Y != 0)
                 {
-                    builder.WriteLine($"result{Deref}CenterPoint = {Vector2(obj.CenterPoint)};");
+                    WriteVector2PropertySetStatement(builder, "result", "CenterPoint", obj.CenterPoint);
                 }
 
                 if (obj.Scale.X != 1 || obj.Scale.Y != 1)
                 {
-                    builder.WriteLine($"result{Deref}Scale = {Vector2(obj.Scale)};");
+                    WriteVector2PropertySetStatement(builder, "result", "Scale", obj.Scale);
                 }
             }
 
             void InitializeCompositionGradientBrush(CodeBuilder builder, CompositionGradientBrush obj, ObjectData node)
             {
                 InitializeCompositionObject(builder, obj, node);
-                if (obj.AnchorPoint.HasValue)
-                {
-                    builder.WriteLine($"result{Deref}AnchorPoint = {Vector2(obj.AnchorPoint.Value)};");
-                }
 
-                if (obj.CenterPoint.HasValue)
-                {
-                    builder.WriteLine($"result{Deref}CenterPoint = {Vector2(obj.CenterPoint.Value)};");
-                }
+                WriteVector2PropertySetStatement(builder, "result", "AnchorPoint", obj.AnchorPoint);
+                WriteVector2PropertySetStatement(builder, "result", "CenterPoint", obj.CenterPoint);
 
                 if (obj.ColorStops.Count > 0)
                 {
@@ -2005,38 +1994,27 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 if (obj.ExtendMode.HasValue)
                 {
-                    builder.WriteLine($"result{Deref}ExtendMode = {ExtendMode(obj.ExtendMode.Value)};");
+                    WritePropertySetStatement(builder, "result", "ExtendMode", ExtendMode(obj.ExtendMode.Value));
                 }
 
                 if (obj.InterpolationSpace.HasValue)
                 {
-                    builder.WriteLine($"result{Deref}InterpolationSpace = {ColorSpace(obj.InterpolationSpace.Value)};");
+                    WritePropertySetStatement(builder, "result", "InterpolationSpace", ColorSpace(obj.InterpolationSpace.Value));
                 }
 
                 // Default MappingMode is Relative
                 if (obj.MappingMode.HasValue && obj.MappingMode.Value != CompositionMappingMode.Relative)
                 {
-                    builder.WriteLine($"result{Deref}MappingMode = {MappingMode(obj.MappingMode.Value)};");
+                    WritePropertySetStatement(builder, "result", "MappingMode", MappingMode(obj.MappingMode.Value));
                 }
 
-                if (obj.Offset.HasValue)
-                {
-                    builder.WriteLine($"result{Deref}Offset = {Vector2(obj.Offset.Value)}");
-                }
-
-                if (obj.RotationAngleInDegrees.HasValue)
-                {
-                    builder.WriteLine($"result{Deref}RotationAngleInDegrees = {Float(obj.RotationAngleInDegrees.Value)}");
-                }
-
-                if (obj.Scale.HasValue)
-                {
-                    builder.WriteLine($"result{Deref}Scale = {Vector2(obj.Scale.Value)}");
-                }
+                WriteVector2PropertySetStatement(builder, "result", "Offset", obj.Offset);
+                WriteFloatPropertySetStatement(builder, "result", "RotationAngleInDegrees", obj.RotationAngleInDegrees);
+                WriteVector2PropertySetStatement(builder, "result", "Scale", obj.Scale);
 
                 if (obj.TransformMatrix.HasValue)
                 {
-                    builder.WriteLine($"result{Deref}TransformMatrix = {Matrix3x2(obj.TransformMatrix.Value)}");
+                    WritePropertySetStatement(builder, "result", "TransformMatrix ", Matrix3x2(obj.TransformMatrix.Value));
                 }
             }
 
@@ -2044,29 +2022,14 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             {
                 InitializeCompositionObject(builder, obj, node);
 
-                if (obj.CenterPoint.HasValue)
-                {
-                    builder.WriteLine($"result{Deref}CenterPoint = {Vector2(obj.CenterPoint.Value)};");
-                }
-
-                if (obj.Offset != null)
-                {
-                    builder.WriteLine($"result{Deref}Offset = {Vector2(obj.Offset.Value)};");
-                }
-
-                if (obj.RotationAngleInDegrees.HasValue)
-                {
-                    builder.WriteLine($"result{Deref}RotationAngleInDegrees = {Float(obj.RotationAngleInDegrees.Value)};");
-                }
-
-                if (obj.Scale.HasValue)
-                {
-                    builder.WriteLine($"result{Deref}Scale = {Vector2(obj.Scale.Value)};");
-                }
+                WriteVector2PropertySetStatement(builder, "result", "CenterPoint", obj.CenterPoint);
+                WriteVector2PropertySetStatement(builder, "result", "Offset", obj.Offset);
+                WriteFloatPropertySetStatement(builder, "result", "RotationAngleInDegrees", obj.RotationAngleInDegrees);
+                WriteVector2PropertySetStatement(builder, "result", "Scale", obj.Scale);
 
                 if (obj.TransformMatrix.HasValue)
                 {
-                    builder.WriteLine($"result{Deref}TransformMatrix = {Matrix3x2(obj.TransformMatrix.Value)};");
+                    WritePropertySetStatement(builder, "result", "TransformMatrix", Matrix3x2(obj.TransformMatrix.Value));
                 }
             }
 
@@ -2110,17 +2073,17 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 if (obj.TrimEnd != 1)
                 {
-                    builder.WriteLine($"result{Deref}TrimEnd = {Float(obj.TrimEnd)};");
+                    WriteFloatPropertySetStatement(builder, "result", "TrimEnd", obj.TrimEnd);
                 }
 
                 if (obj.TrimOffset != 0)
                 {
-                    builder.WriteLine($"result{Deref}TrimOffset = {Float(obj.TrimOffset)};");
+                    WriteFloatPropertySetStatement(builder, "result", "TrimOffset", obj.TrimOffset);
                 }
 
                 if (obj.TrimStart != 0)
                 {
-                    builder.WriteLine($"result{Deref}TrimStart = {Float(obj.TrimStart)};");
+                    WriteFloatPropertySetStatement(builder, "result", "TrimStart", obj.TrimStart);
                 }
             }
 
@@ -2138,7 +2101,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 InitializeCompositionObject(builder, obj, node);
                 if (!string.IsNullOrWhiteSpace(obj.Target))
                 {
-                    builder.WriteLine($"result{Deref}Target = {String(obj.Target)};");
+                    WritePropertySetStatement(builder, "result", "Target", String(obj.Target));
                 }
 
                 foreach (var parameter in parameters)
@@ -2150,7 +2113,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             void InitializeKeyFrameAnimation(CodeBuilder builder, KeyFrameAnimation_ obj, ObjectData node)
             {
                 InitializeCompositionAnimation(builder, obj, node);
-                builder.WriteLine($"result{Deref}Duration = {TimeSpan(obj.Duration)};");
+                WritePropertySetStatement(builder, "result", "Duration", TimeSpan(obj.Duration));
             }
 
             bool GenerateColorKeyFrameAnimationFactory(CodeBuilder builder, ColorKeyFrameAnimation obj, ObjectData node)
@@ -2161,7 +2124,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 if (obj.InterpolationColorSpace != CompositionColorSpace.Auto)
                 {
-                    builder.WriteLine($"result{Deref}InterpolationColorSpace = {ColorSpace(obj.InterpolationColorSpace)};");
+                    WritePropertySetStatement(builder, "result", "InterpolationColorSpace", ColorSpace(obj.InterpolationColorSpace));
                 }
 
                 foreach (var kf in obj.KeyFrames)
@@ -2322,12 +2285,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 WriteCreateAssignment(builder, node, $"_c{Deref}CreateRectangleGeometry()");
                 InitializeCompositionGeometry(builder, obj, node);
 
-                if (obj.Offset != null)
-                {
-                    builder.WriteLine($"result{Deref}Offset = {Vector2(obj.Offset.Value)};");
-                }
+                WriteVector2PropertySetStatement(builder, "result", "Offset", obj.Offset);
+                WriteVector2PropertySetStatement(builder, "result", "Size", obj.Size);
 
-                builder.WriteLine($"result{Deref}Size = {Vector2(obj.Size)};");
                 StartAnimationsOnResult(builder, obj, node);
                 WriteObjectFactoryEnd(builder);
                 return true;
@@ -2338,14 +2298,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 WriteObjectFactoryStart(builder, node);
                 WriteCreateAssignment(builder, node, $"_c{Deref}CreateRoundedRectangleGeometry()");
                 InitializeCompositionGeometry(builder, obj, node);
-                builder.WriteLine($"result{Deref}CornerRadius = {Vector2(obj.CornerRadius)};");
 
-                if (obj.Offset != null)
-                {
-                    builder.WriteLine($"result{Deref}Offset = {Vector2(obj.Offset.Value)};");
-                }
+                WriteVector2PropertySetStatement(builder, "result", "CornerRadius", obj.CornerRadius);
+                WriteVector2PropertySetStatement(builder, "result", "Offset", obj.Offset);
+                WriteVector2PropertySetStatement(builder, "result", "Size", obj.Size);
 
-                builder.WriteLine($"result{Deref}Size = {Vector2(obj.Size)};");
                 StartAnimationsOnResult(builder, obj, node);
                 WriteObjectFactoryEnd(builder);
                 return true;
@@ -2359,10 +2316,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 if (obj.Center.X != 0 || obj.Center.Y != 0)
                 {
-                    builder.WriteLine($"result{Deref}Center = {Vector2(obj.Center)};");
+                    WriteVector2PropertySetStatement(builder, "result", "Center", obj.Center);
                 }
 
-                builder.WriteLine($"result{Deref}Radius = {Vector2(obj.Radius)};");
+                WriteVector2PropertySetStatement(builder, "result", "Radius", obj.Radius);
                 StartAnimationsOnResult(builder, obj, node);
                 WriteObjectFactoryEnd(builder);
                 return true;
@@ -2446,7 +2403,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 if (obj.Brush != null)
                 {
-                    builder.WriteLine($"result{Deref}Brush = {CallFactoryFromFor(node, obj.Brush)};");
+                    WritePropertySetStatement(builder, "result", "Brush", CallFactoryFromFor(node, obj.Brush));
                 }
 
                 StartAnimationsOnResult(builder, obj, node);
@@ -2521,27 +2478,27 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 if (obj.FillBrush != null)
                 {
-                    builder.WriteLine($"result{Deref}FillBrush = {CallFactoryFromFor(node, obj.FillBrush)};");
+                    WritePropertySetStatement(builder, "result", "FillBrush", CallFactoryFromFor(node, obj.FillBrush));
                 }
 
                 if (obj.IsStrokeNonScaling)
                 {
-                    builder.WriteLine("result{Deref}IsStrokeNonScaling = true;");
+                    WriteBoolPropertySetStatement(builder, "result", "IsStrokeNonScaling", true);
                 }
 
                 if (obj.StrokeBrush != null)
                 {
-                    builder.WriteLine($"result{Deref}StrokeBrush = {CallFactoryFromFor(node, obj.StrokeBrush)};");
+                    WritePropertySetStatement(builder, "result", "StrokeBrush", CallFactoryFromFor(node, obj.StrokeBrush));
                 }
 
                 if (obj.StrokeDashCap != CompositionStrokeCap.Flat)
                 {
-                    builder.WriteLine($"result{Deref}StrokeDashCap = {StrokeCap(obj.StrokeDashCap)};");
+                    WritePropertySetStatement(builder, "result", "StrokeDashCap", StrokeCap(obj.StrokeDashCap));
                 }
 
                 if (obj.StrokeDashOffset != 0)
                 {
-                    builder.WriteLine($"result{Deref}StrokeDashOffset = {Float(obj.StrokeDashOffset)};");
+                    WriteFloatPropertySetStatement(builder, "result", "StrokeDashOffset", obj.StrokeDashOffset);
                 }
 
                 if (obj.StrokeDashArray.Count > 0)
@@ -2555,27 +2512,27 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 if (obj.StrokeEndCap != CompositionStrokeCap.Flat)
                 {
-                    builder.WriteLine($"result{Deref}StrokeEndCap = {StrokeCap(obj.StrokeEndCap)};");
+                    WritePropertySetStatement(builder, "result", "StrokeEndCap", StrokeCap(obj.StrokeEndCap));
                 }
 
                 if (obj.StrokeLineJoin != CompositionStrokeLineJoin.Miter)
                 {
-                    builder.WriteLine($"result{Deref}StrokeLineJoin = {StrokeLineJoin(obj.StrokeLineJoin)};");
+                    WritePropertySetStatement(builder, "result", "StrokeLineJoin", StrokeLineJoin(obj.StrokeLineJoin));
                 }
 
                 if (obj.StrokeStartCap != CompositionStrokeCap.Flat)
                 {
-                    builder.WriteLine($"result{Deref}StrokeStartCap = {StrokeCap(obj.StrokeStartCap)};");
+                    WritePropertySetStatement(builder, "result", "StrokeStartCap", StrokeCap(obj.StrokeStartCap));
                 }
 
                 if (obj.StrokeMiterLimit != 1)
                 {
-                    builder.WriteLine($"result{Deref}StrokeMiterLimit = {Float(obj.StrokeMiterLimit)};");
+                    WriteFloatPropertySetStatement(builder, "result", "StrokeMiterLimit", obj.StrokeMiterLimit);
                 }
 
                 if (obj.StrokeThickness != 1)
                 {
-                    builder.WriteLine($"result{Deref}StrokeThickness = {Float(obj.StrokeThickness)};");
+                    WriteFloatPropertySetStatement(builder, "result", "StrokeThickness", obj.StrokeThickness);
                 }
 
                 StartAnimationsOnResult(builder, obj, node);
@@ -2594,10 +2551,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     switch (obj.Surface)
                     {
                         case CompositionObject compositionObject:
-                            builder.WriteLine($"result{Deref}Surface = {CallFactoryFromFor(node, compositionObject)};");
+                            WritePropertySetStatement(builder, "result", "Surface", CallFactoryFromFor(node, compositionObject));
                             break;
                         case Wmd.LoadedImageSurface loadedImageSurface:
-                            builder.WriteLine($"result{Deref}Surface = {NodeFor(loadedImageSurface).FieldName};");
+                            WritePropertySetStatement(builder, "result", "Surface", NodeFor(loadedImageSurface).FieldName);
                             break;
                         default:
                             throw new InvalidOperationException();
@@ -2628,18 +2585,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 if (obj.SourceVisual != null)
                 {
-                    builder.WriteLine($"result{Deref}SourceVisual = {CallFactoryFromFor(node, obj.SourceVisual)};");
+                    WritePropertySetStatement(builder, "result", "SourceVisual", CallFactoryFromFor(node, obj.SourceVisual));
                 }
 
-                if (obj.SourceSize != null)
-                {
-                    builder.WriteLine($"result{Deref}SourceSize = {Vector2(obj.SourceSize.Value)};");
-                }
-
-                if (obj.SourceOffset != null)
-                {
-                    builder.WriteLine($"result{Deref}SourceOffset = {Vector2(obj.SourceOffset.Value)};");
-                }
+                WriteVector2PropertySetStatement(builder, "result", "SourceSize", obj.SourceSize);
+                WriteVector2PropertySetStatement(builder, "result", "SourceOffset", obj.SourceOffset);
 
                 StartAnimationsOnResult(builder, obj, node);
                 WriteObjectFactoryEnd(builder);

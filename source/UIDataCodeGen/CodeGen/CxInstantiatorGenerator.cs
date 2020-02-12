@@ -21,6 +21,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
     {
         readonly CppStringifier _s;
         readonly string _headerFileName;
+        static bool s_isWinrtcppMode = true;
 
         CxInstantiatorGenerator(
             string className,
@@ -69,7 +70,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 duration: duration,
                 disableFieldOptimization: disableFieldOptimization,
                 setCommentProperties: false,
-                stringifier: new CppStringifier(),
+                stringifier: new CppStringifier(s_isWinrtcppMode),
                 headerFileName: headerFileName);
 
             var cppText = generator.GenerateCode();
@@ -767,7 +768,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         {
             if (info.IsThemed)
             {
-                builder.WriteLine("#include \"IThemedLottie.h\"");
+                builder.WriteLine("#include \"IThemedAnimatedVisualSource.h\"");
             }
 
             builder.WriteLine();
@@ -778,8 +779,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             if (info.IsThemed)
             {
-                // Make the AnimatedVisualSource inherit from IThemedLottie.
-                inherits += ", IThemedLottie";
+                // Make the AnimatedVisualSource inherit from IThemedAnimatedVisualSource.
+                inherits += ", IThemedAnimatedVisualSource";
             }
 
             builder.WriteLine($"public ref class {info.ClassName} sealed : {inherits}");
