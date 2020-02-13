@@ -6,7 +6,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
-using System.Text;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.Mgcg;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinUIXamlMediaData;
@@ -19,9 +18,12 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 #endif
     sealed class CxInstantiatorGenerator : InstantiatorGeneratorBase
     {
+        const string Muxc = "Microsoft::UI::Xaml::Controls";
+        const string Wuc = "Windows::UI::Composition";
+        readonly bool _isCppWinrtMode;
         readonly CppStringifier _s;
         readonly string _headerFileName;
-        static bool s_isWinrtcppMode = true;
+        readonly TypeNames _typeName;
 
         CxInstantiatorGenerator(
             string className,
@@ -32,7 +34,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             bool setCommentProperties,
             bool disableFieldOptimization,
             CppStringifier stringifier,
-            string headerFileName)
+            string headerFileName,
+            bool isCppwinrtMode)
             : base(
                   className: className,
                   compositionDeclaredSize: size,
@@ -44,7 +47,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                   stringifier: stringifier)
         {
             _s = stringifier;
+            _isCppWinrtMode = isCppwinrtMode;
             _headerFileName = headerFileName;
+            _typeName = new TypeNames(stringifier, isCppwinrtMode);
         }
 
         /// <summary>
@@ -60,7 +65,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             float height,
             TimeSpan duration,
             string headerFileName,
-            bool disableFieldOptimization)
+            bool disableFieldOptimization,
+            bool isCppwinrtMode)
         {
             var generator = new CxInstantiatorGenerator(
                 className: className,
@@ -70,8 +76,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 duration: duration,
                 disableFieldOptimization: disableFieldOptimization,
                 setCommentProperties: false,
-                stringifier: new CppStringifier(s_isWinrtcppMode),
-                headerFileName: headerFileName);
+                stringifier: isCppwinrtMode ? new CppWinrtStringifier() : (CppStringifier)new CxStringifier(),
+                headerFileName: headerFileName,
+                isCppwinrtMode: isCppwinrtMode);
 
             var cppText = generator.GenerateCode();
 
@@ -174,11 +181,17 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             // A sorted set to hold the namespaces that the generated code will use. The set is maintained in sorted order.
             var namespaces = new SortedSet<string>();
 
-            namespaces.Add("Platform");
+            namespaces.Add(Muxc);
+            if (!_isCppWinrtMode)
+            {
+                namespaces.Add("Platform");
+            }
+
             namespaces.Add("Windows::Foundation");
+            namespaces.Add("Windows::Foundation::Metadata");
             namespaces.Add("Windows::Foundation::Numerics");
             namespaces.Add("Windows::UI");
-            namespaces.Add("Windows::UI::Composition");
+            namespaces.Add(Wuc);
             namespaces.Add("Windows::Graphics");
 
             if (info.UsesCanvas ||
@@ -202,7 +215,14 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             // Write out each namespace using.
             foreach (var n in namespaces)
             {
-                builder.WriteLine($"using namespace {n};");
+                if (_isCppWinrtMode)
+                {
+                    builder.WriteLine($"using namespace winrt::{n};");
+                }
+                else
+                {
+                    builder.WriteLine($"using namespace {n};");
+                }
             }
 
             builder.WriteLine();
@@ -210,6 +230,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             // Put the Instantiator class in an anonymous namespace.
             builder.WriteLine("namespace");
             builder.WriteLine("{");
+            builder.Indent();
 
             if (info.UsesCanvasEffects ||
                 info.UsesCanvasGeometry)
@@ -236,7 +257,21 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             IAnimatedVisualInfo info)
         {
             // Start writing the instantiator.
-            builder.WriteLine($"ref class {info.ClassName} sealed : public Microsoft::UI::Xaml::Controls::IAnimatedVisual");
+            if (_isCppWinrtMode)
+            {
+                builder.WriteLine($"class {info.ClassName}");
+                builder.Indent();
+                builder.WriteLine($": public winrt::implements<{info.ClassName}, winrt::IAnimatedVisual, winrt::IClosable>");
+                builder.UnIndent();
+            }
+            else
+            {
+                builder.WriteLine($"ref class {info.ClassName} sealed");
+                builder.Indent();
+                builder.WriteLine($": public IAnimatedVisual");
+                builder.UnIndent();
+            }
+
             builder.OpenScope();
 
             if (info.AnimatedVisualSourceInfo.UsesCanvasEffects ||
@@ -249,11 +284,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         IEnumerable<string> GetConstructorParameters(IAnimatedVisualInfo info)
         {
-            yield return "Compositor^ compositor";
+            yield return $"{_typeName.Compositor} compositor";
 
             if (info.AnimatedVisualSourceInfo.IsThemed)
             {
-                yield return "CompositionPropertySet^ themeProperties";
+                yield return $"{_typeName.CompositionPropertySet} themeProperties";
             }
 
             foreach (var loadedImageSurfaceNode in info.LoadedImageSurfaceNodes)
@@ -272,10 +307,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 info.AnimatedVisualSourceInfo.UsesCanvasGeometry)
             {
                 // Utility method for D2D geometries
-                builder.WriteLine("static IGeometrySource2D^ CanvasGeometryToIGeometrySource2D(CanvasGeometry geo)");
+                builder.WriteLine($"static {_typeName.IGeometrySource2D} CanvasGeometryToIGeometrySource2D(CanvasGeometry geo)");
                 builder.OpenScope();
-                builder.WriteLine("ComPtr<ABI::Windows::Graphics::IGeometrySource2D> interop = geo.Detach();");
-                builder.WriteLine("return reinterpret_cast<IGeometrySource2D^>(interop.Get());");
+                builder.WriteLine($"ComPtr<ABI::Windows::Graphics::{_typeName.IGeometrySource2D}> interop = geo.Detach();");
+                builder.WriteLine($"return reinterpret_cast<{_typeName.IGeometrySource2D}>(interop.Get());");
                 builder.CloseScope();
                 builder.WriteLine();
 
@@ -300,7 +335,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.Indent();
 
             // Initializer list.
-            builder.Indent();
             builder.WriteLine(": _c(compositor)");
             if (info.AnimatedVisualSourceInfo.IsThemed)
             {
@@ -314,9 +348,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             }
 
             // Instantiate the reusable ExpressionAnimation.
-            builder.WriteLine($", {info.AnimatedVisualSourceInfo.ReusableExpressionAnimationFieldName}(compositor->CreateExpressionAnimation())");
+            builder.WriteLine($", {info.AnimatedVisualSourceInfo.ReusableExpressionAnimationFieldName}(compositor{_s.Deref}CreateExpressionAnimation())");
 
-            builder.UnIndent();
             builder.UnIndent();
 
             builder.OpenScope();
@@ -327,39 +360,81 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             }
 
             // Instantiate the root. This will cause the whole Visual tree to be built and animations started.
-            builder.WriteLine("Root();");
+            builder.WriteLine("const auto _ = Root();");
             builder.CloseScope();
 
             // Write the destructor. This is how CX implements IClosable/IDisposable.
             builder.WriteLine();
-            builder.WriteLine($"virtual ~{info.ClassName}() {{ }}");
+            if (_isCppWinrtMode)
+            {
+                builder.WriteLine("void Close()");
+                builder.OpenScope();
+                builder.WriteLine("if (_root)");
+                builder.OpenScope();
+                builder.WriteLine("_root.Close();");
+                builder.CloseScope();
+                builder.CloseScope();
+            }
+            else
+            {
+                // CX doesn't need to do anything - the root object will be disposed
+                // as a result of this object being cleaned up.
+                builder.WriteLine($"virtual ~{info.ClassName}() {{ }}");
+            }
 
             // Write the members on IAnimatedVisual.
             builder.WriteLine();
-            builder.WriteLine("property TimeSpan Duration");
-            builder.OpenScope();
-            builder.WriteLine($"virtual TimeSpan get() {{ return {{ {info.AnimatedVisualSourceInfo.DurationTicksFieldName} }}; }}");
-            builder.CloseScope();
+            {
+                var propertyImplBuilder = new CodeBuilder();
+                propertyImplBuilder.WriteLine($"return {{ {_s.TimeSpan(info.AnimatedVisualSourceInfo.DurationTicksFieldName)} }};");
+                WriteReadOnlyPropertyImpl(builder, "TimeSpan", "Duration", propertyImplBuilder);
+            }
+
             builder.WriteLine();
-            builder.WriteLine("property Visual^ RootVisual");
-            builder.OpenScope();
-            builder.WriteLine("virtual Visual^ get() { return _root; }");
-            builder.CloseScope();
+            {
+                var propertyImplBuilder = new CodeBuilder();
+                propertyImplBuilder.WriteLine("return _root;");
+                WriteReadOnlyPropertyImpl(builder, _typeName.Visual, "RootVisual", propertyImplBuilder);
+            }
+
             builder.WriteLine();
-            builder.WriteLine("property float2 Size");
-            builder.OpenScope();
-            builder.WriteLine($"virtual float2 get() {{ return {Vector2(info.AnimatedVisualSourceInfo.CompositionDeclaredSize)}; }}");
-            builder.CloseScope();
-            builder.WriteLine();
+            {
+                var propertyImplBuilder = new CodeBuilder();
+                propertyImplBuilder.WriteLine($"return {Vector2(info.AnimatedVisualSourceInfo.CompositionDeclaredSize)};");
+                WriteReadOnlyPropertyImpl(builder, "float2", "Size", propertyImplBuilder);
+            }
 
             // Write the IsRuntimeCompatible static method.
             builder.WriteLine("static bool IsRuntimeCompatible()");
             builder.OpenScope();
-            builder.WriteLine($"return Windows::Foundation::Metadata::ApiInformation::IsApiContractPresent(\"Windows.Foundation.UniversalApiContract\", {info.RequiredUapVersion});");
+            builder.WriteLine($"return ApiInformation::IsApiContractPresent({_s.String("Windows.Foundation.UniversalApiContract")}, {info.RequiredUapVersion});");
             builder.CloseScope();
 
             // Close the scope for the instantiator class.
             builder.CloseCppTypeScope();
+        }
+
+        void WriteReadOnlyPropertyImpl(CodeBuilder builder, string returnType, string propertyName, CodeBuilder implementation)
+        {
+            if (_isCppWinrtMode)
+            {
+                builder.WriteLine($"{returnType} {propertyName}() const");
+                builder.OpenScope();
+                builder.WriteCodeBuilder(implementation);
+                builder.CloseScope();
+                builder.WriteLine();
+            }
+            else
+            {
+                builder.WriteLine($"property {returnType} {propertyName}");
+                builder.OpenScope();
+                builder.WriteLine($"virtual {returnType} get()");
+                builder.OpenScope();
+                builder.WriteCodeBuilder(implementation);
+                builder.CloseScope();
+                builder.CloseScope();
+                builder.WriteLine();
+            }
         }
 
         /// <inheritdoc/>
@@ -369,24 +444,25 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             IAnimatedVisualSourceInfo info)
         {
             // Close the anonymous namespace.
+            builder.UnIndent();
             builder.WriteLine("} // end namespace");
             builder.WriteLine();
 
             // Generate the methods that create and get the theme property set.
             if (info.IsThemed)
             {
-                builder.WriteLine($"CompositionPropertySet^ AnimatedVisuals::{info.ClassName}::EnsureThemeProperties(Compositor^ compositor)");
+                builder.WriteLine($"{_typeName.CompositionPropertySet} AnimatedVisuals::{info.ClassName}::EnsureThemeProperties({_typeName.Compositor} compositor)");
                 builder.OpenScope();
                 builder.WriteLine($"if ({info.ThemePropertiesFieldName} == nullptr)");
                 builder.OpenScope();
-                builder.WriteLine($"{info.ThemePropertiesFieldName} = compositor->CreatePropertySet();");
+                builder.WriteLine($"{info.ThemePropertiesFieldName} = compositor{_s.Deref}CreatePropertySet();");
                 WriteThemePropertySetInitialization(builder, info.ThemePropertiesFieldName);
                 builder.CloseScope();
                 builder.WriteLine($"return {info.ThemePropertiesFieldName};");
                 builder.CloseScope();
                 builder.WriteLine();
 
-                builder.WriteLine($"CompositionPropertySet^ AnimatedVisuals::{info.ClassName}::GetThemeProperties(Compositor^ compositor)");
+                builder.WriteLine($"{_typeName.CompositionPropertySet} AnimatedVisuals::{info.ClassName}::GetThemeProperties({_typeName.Compositor} compositor)");
                 builder.OpenScope();
                 builder.WriteLine("return EnsureThemeProperties(compositor);");
                 builder.CloseScope();
@@ -394,16 +470,25 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             }
 
             // Generate the method that creates an instance of the composition on the IAnimatedVisualSource
-            builder.WriteLine($"Microsoft::UI::Xaml::Controls::IAnimatedVisual^ AnimatedVisuals::{info.ClassName}::TryCreateAnimatedVisual(");
+            builder.WriteLine($"{_typeName.IAnimatedVisual} AnimatedVisuals::{info.ClassName}::TryCreateAnimatedVisual(");
             builder.Indent();
-            builder.WriteLine("Compositor^ compositor,");
-            builder.WriteLine("Object^* diagnostics)");
+            if (_isCppWinrtMode)
+            {
+                builder.WriteLine($"const {_typeName.Compositor}& compositor,");
+                builder.WriteLine($"{_typeName.Object}& diagnostics)");
+            }
+            else
+            {
+                builder.WriteLine($"{_typeName.Compositor} compositor,");
+                builder.WriteLine($"{_typeName.Object}* diagnostics)");
+            }
+
             builder.UnIndent();
             builder.OpenScope();
 
             if (info.IsThemed)
             {
-                builder.WriteLine("EnsureThemeProperties(compositor);");
+                builder.WriteLine("const auto _ = EnsureThemeProperties(compositor);");
             }
 
             if (info.LoadedImageSurfaces.Count > 0)
@@ -562,7 +647,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 builder.CloseScope();
             }
 
-            return "reinterpret_cast<Windows::Graphics::Effects::IGraphicsEffect^>(compositeEffect.Get())";
+            return $"reinterpret_cast<{_s.ReferenceTypeName("Windows::Graphics::Effects::IGraphicsEffect")}>(compositeEffect.Get())";
         }
 
         /// <summary>
@@ -626,7 +711,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 builder.WriteLine();
                 builder.WriteLine($"if ({info.ClassName}::IsRuntimeCompatible())");
                 builder.OpenScope();
-                builder.WriteBreakableLine($"return ref new {info.ClassName}(", CommaSeparate(GetConstructorArguments(info)), ");");
+                builder.WriteBreakableLine($"return {_s.New(info.ClassName)}(", CommaSeparate(GetConstructorArguments(info)), ");");
                 builder.CloseScope();
                 builder.WriteLine();
                 builder.WriteLine("return nullptr;");
@@ -657,7 +742,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.OpenScope();
             builder.WriteLine("if (!m_isImageLoadingStarted)");
             builder.OpenScope();
-            builder.WriteLine($"auto eventHandler = ref new TypedEventHandler<LoadedImageSurface^, LoadedImageSourceLoadCompletedEventArgs^>(this, &AnimatedVisuals::{info.ClassName}::HandleLoadCompleted);");
+            builder.WriteLine($"auto eventHandler = ref new TypedEventHandler<{_s.ReferenceTypeName("LoadedImageSurface")}, {_s.ReferenceTypeName("LoadedImageSourceLoadCompletedEventArgs")}>(this, &AnimatedVisuals::{info.ClassName}::HandleLoadCompleted);");
 
             foreach (var n in info.LoadedImageSurfaces)
             {
@@ -693,7 +778,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         void WriteHandleLoadCompleted(CodeBuilder builder, IAnimatedVisualSourceInfo info)
         {
-            builder.WriteLine($"void AnimatedVisuals::{info.ClassName}::HandleLoadCompleted(LoadedImageSurface^ sender, LoadedImageSourceLoadCompletedEventArgs^ e)");
+            builder.WriteLine($"void AnimatedVisuals::{info.ClassName}::HandleLoadCompleted({_s.ReferenceTypeName("LoadedImageSurface")} sender, {_s.ReferenceTypeName("LoadedImageSourceLoadCompletedEventArgs")} e)");
             builder.OpenScope();
             builder.WriteLine("m_loadCompleteEventCount++;");
             builder.WriteLine("if (e->Status == LoadedImageSourceLoadStatus::Success)");
@@ -783,14 +868,33 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 inherits += ", IThemedAnimatedVisualSource";
             }
 
-            builder.WriteLine($"public ref class {info.ClassName} sealed : {inherits}");
+            if (_isCppWinrtMode)
+            {
+                builder.WriteLine($"class {info.ClassName}");
+                builder.Indent();
+                builder.WriteLine($": public winrt::implements<{info.ClassName}, winrt::{inherits}>");
+                builder.UnIndent();
+            }
+            else
+            {
+                builder.WriteLine($"public ref class {info.ClassName} sealed");
+                builder.Indent();
+                builder.WriteLine($": public {inherits}");
+                builder.UnIndent();
+            }
 
             builder.OpenScope();
+
+            var wuc =
+                _isCppWinrtMode
+                    ? $"winrt::{Wuc}"
+                    : Wuc;
+
             if (info.IsThemed)
             {
-                builder.WriteLine($"Windows::UI::Composition::CompositionPropertySet^ {info.ThemePropertiesFieldName}{{}};");
+                builder.WriteLine($"{wuc}::{_typeName.CompositionPropertySet} {info.ThemePropertiesFieldName}{{ nullptr }};");
                 builder.WriteLine();
-                builder.WriteLine("Windows::UI::Composition::CompositionPropertySet^ EnsureThemeProperties(Windows::UI::Composition::Compositor^ compositor);");
+                builder.WriteLine($"{wuc}::{_typeName.CompositionPropertySet} EnsureThemeProperties({wuc}::{_typeName.Compositor} compositor);");
                 builder.WriteLine();
             }
 
@@ -799,18 +903,32 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.Indent();
             if (info.IsThemed)
             {
-                builder.WriteLine("virtual Windows::UI::Composition::CompositionPropertySet^ GetThemeProperties(Windows::UI::Composition::Compositor^ compositor);");
+                builder.WriteLine($"virtual {wuc}::{_typeName.CompositionPropertySet} GetThemeProperties({wuc}::{_typeName.Compositor} compositor);");
                 builder.WriteLine();
             }
         }
 
         void WriteIAnimatedVisualSourceHeaderText(CodeBuilder builder, IAnimatedVisualSourceInfo info)
         {
-            WriteHeaderNamespaceStart(builder, info, "public Microsoft::UI::Xaml::Controls::IAnimatedVisualSource");
-            builder.WriteLine("virtual Microsoft::UI::Xaml::Controls::IAnimatedVisual^ TryCreateAnimatedVisual(");
+            WriteHeaderNamespaceStart(builder, info, $"{Muxc}::IAnimatedVisualSource");
+            var returnType =
+                _isCppWinrtMode
+                    ? _s.ReferenceTypeName($"winrt::{Muxc}::{_typeName.IAnimatedVisual}")
+                    : _s.ReferenceTypeName($"{Muxc}::{_typeName.IAnimatedVisual}");
+
+            builder.WriteLine($"virtual {returnType} TryCreateAnimatedVisual(");
             builder.Indent();
-            builder.WriteLine("Windows::UI::Composition::Compositor^ compositor,");
-            builder.WriteLine("Platform::Object^* diagnostics);");
+            if (_isCppWinrtMode)
+            {
+                builder.WriteLine($"const winrt::{Wuc}::{_typeName.Compositor}& compositor,");
+                builder.WriteLine($"winrt::{_typeName.Object}& diagnostics);");
+            }
+            else
+            {
+                builder.WriteLine($"{Wuc}::{_typeName.Compositor} compositor,");
+                builder.WriteLine($"{_typeName.Object}* diagnostics);");
+            }
+
             builder.UnIndent();
             builder.CloseCppTypeScope();
             builder.CloseScope();
@@ -820,7 +938,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         {
             var loadedImageSurfaceNodes = info.LoadedImageSurfaces.ToArray();
 
-            builder.WriteLine("using namespace Microsoft::UI::Xaml::Controls;");
+            builder.WriteLine($"using namespace {Muxc};");
             builder.WriteLine("using namespace Platform;");
             builder.WriteLine("using namespace Windows::UI::Xaml;");
             builder.WriteLine("using namespace Windows::UI::Xaml::Data;");
@@ -829,9 +947,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             WriteHeaderNamespaceStart(builder, info, "public IDynamicAnimatedVisualSource, INotifyPropertyChanged");
 
             builder.WriteLine();
-            builder.WriteLine("virtual event Windows::Foundation::TypedEventHandler<IDynamicAnimatedVisualSource^, Platform::Object^>^ AnimatedVisualInvalidated");
+            builder.WriteLine($"virtual event {_s.ReferenceTypeName($"Windows::Foundation::TypedEventHandler<{_s.ReferenceTypeName("IDynamicAnimatedVisualSource")}, {_typeName.Object}>")} AnimatedVisualInvalidated");
             builder.OpenScope();
-            builder.WriteLine("Windows::Foundation::EventRegistrationToken add(Windows::Foundation::TypedEventHandler<IDynamicAnimatedVisualSource^, Platform::Object ^>^ value)");
+            builder.WriteLine($"Windows::Foundation::EventRegistrationToken add({_s.ReferenceTypeName($"Windows::Foundation::TypedEventHandler<{_s.ReferenceTypeName("IDynamicAnimatedVisualSource")}, {_typeName.Object}>")} value)");
             builder.OpenScope();
             builder.WriteLine("return m_InternalHandler::add(value);");
             builder.CloseScope();
@@ -842,13 +960,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.CloseScope();
 
             builder.WriteLine();
-            builder.WriteLine("virtual Microsoft::UI::Xaml::Controls::IAnimatedVisual^ TryCreateAnimatedVisual(");
+            builder.WriteLine($"virtual {_s.ReferenceTypeName($"{Muxc}::{_typeName.IAnimatedVisual}")} TryCreateAnimatedVisual(");
             builder.Indent();
-            builder.WriteLine("Windows::UI::Composition::Compositor^ compositor,");
-            builder.WriteLine("Platform::Object^* diagnostics);");
+            builder.WriteLine($"{Wuc}::{_typeName.Compositor} compositor,");
+            builder.WriteLine($"{_typeName.Object}* diagnostics);");
             builder.UnIndent();
             builder.WriteLine();
-            builder.WriteLine("virtual event PropertyChangedEventHandler^ PropertyChanged;");
+            builder.WriteLine($"virtual event {_s.ReferenceTypeName("PropertyChangedEventHandler")} PropertyChanged;");
             builder.WriteSummaryComment("If this property is set to true, <see cref=\"TryCreateAnimatedVisual\"/> will" +
                 " return null until all images have loaded. When all images have loaded, <see cref=\"TryCreateAnimatedVisual\"/>" +
                 " will return the AnimatedVisual. To use, set it when declaring the AnimatedVisualSource. Once" +
@@ -883,7 +1001,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.WriteLine("bool m_isImageLoadingCompleted{}");
             builder.WriteLine("bool m_isTryCreateAnimatedVisualCalled{}");
             builder.WriteLine("bool m_isImageLoadingStarted{}");
-            builder.WriteLine("event Windows::Foundation::TypedEventHandler<IDynamicAnimatedVisualSource^, Platform::Object^>^ m_InternalHandler;");
+            builder.WriteLine($"event {_s.ReferenceTypeName($"Windows::Foundation::TypedEventHandler<{_s.ReferenceTypeName("IDynamicAnimatedVisualSource")}, {_typeName.Object}>")} m_InternalHandler;");
 
             foreach (var n in loadedImageSurfaceNodes)
             {
@@ -891,8 +1009,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             }
 
             builder.WriteLine("void EnsureImageLoadingStarted();");
-            builder.WriteLine("void HandleLoadCompleted(LoadedImageSurface^ sender, LoadedImageSourceLoadCompletedEventArgs^ e);");
-            builder.WriteLine("void RaiseAnimatedVisualInvalidatedEvent(IDynamicAnimatedVisualSource^ sender, Platform::Object^ object)");
+            builder.WriteLine($"void HandleLoadCompleted({_s.ReferenceTypeName("LoadedImageSurface")} sender, {_s.ReferenceTypeName("LoadedImageSourceLoadCompletedEventArgs")} e);");
+            builder.WriteLine($"void RaiseAnimatedVisualInvalidatedEvent({_s.ReferenceTypeName("IDynamicAnimatedVisualSource")} sender, {_typeName.Object} object)");
             builder.OpenScope();
             builder.OpenScope();
             builder.WriteLine("m_InternalHandler::raise(sender, object);");
@@ -1117,5 +1235,30 @@ private:
     std::vector<Microsoft::WRL::ComPtr<IGraphicsEffectSource>> m_sources;
 };
 ";
+
+        readonly struct TypeNames
+        {
+            internal TypeNames(Stringifier stringifier, bool isCppWinrtMode)
+            {
+                CompositionPropertySet = stringifier.ReferenceTypeName(nameof(CompositionPropertySet));
+                Compositor = stringifier.ReferenceTypeName(nameof(Compositor));
+                Object = isCppWinrtMode ? stringifier.ReferenceTypeName("IInspectable") : stringifier.ReferenceTypeName("Object");
+                Visual = stringifier.ReferenceTypeName(nameof(Visual));
+                IAnimatedVisual = stringifier.ReferenceTypeName("IAnimatedVisual");
+                IGeometrySource2D = stringifier.ReferenceTypeName("IGeometrySource2D");
+            }
+
+            internal string CompositionPropertySet { get; }
+
+            internal string Compositor { get; }
+
+            internal string IAnimatedVisual { get; }
+
+            internal string IGeometrySource2D { get; }
+
+            internal string Object { get; }
+
+            internal string Visual { get; }
+        }
     }
 }

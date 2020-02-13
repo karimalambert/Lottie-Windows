@@ -223,7 +223,7 @@ Usage: {0} -InputFile LOTTIEFILE -Language LANG [Other options]
 OVERVIEW:
        Generates source code from Lottie files for playing in the AnimatedVisualPlayer. 
        LOTTIEFILE is a Lottie .json file. LOTTIEFILE may contain wildcards.
-       LANG is one of cs, cppcx, winrtcpp, wincompxml, lottiexml, lottieyaml, dgml, or stats.
+       LANG is one of cs, cppcx, cppwinrt, wincompxml, lottiexml, lottieyaml, dgml, or stats.
        -Language LANG may be specified multiple times.
 
        [Other options]
@@ -255,10 +255,10 @@ OVERVIEW:
 
 EXAMPLES:
 
-       Generate Foo.cpp and Foo.h winrtcpp files in the current directory from the 
+       Generate Foo.cpp and Foo.h cppwinrt files in the current directory from the 
        Lottie file Foo.json:
 
-         {0} -InputFile Foo.json -Language winrtcpp
+         {0} -InputFile Foo.json -Language cppwinrt
 
 
        Keywords can be abbreviated and are case insensitive.
