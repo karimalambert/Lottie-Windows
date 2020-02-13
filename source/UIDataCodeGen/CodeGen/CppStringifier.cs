@@ -12,14 +12,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
     /// <summary>
     /// Stringifiers for C++ syntax.
     /// </summary>
-    sealed class CppStringifier : Stringifier
+    abstract class CppStringifier : Stringifier
     {
-        readonly bool _isWinrtcppMode;
-
-        internal CppStringifier(bool isWinrtcppMode)
+        private protected CppStringifier()
         {
-            _isWinrtcppMode = isWinrtcppMode;
         }
+
+        public override string DefaultInitialize => "{}";
 
         public override string CanvasFigureLoop(Mgcg.CanvasFigureLoop value)
         {
@@ -55,11 +54,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         public override string Deref => "->";
 
-        public override string PropertySet(string target, string propertyName, string value)
-            => _isWinrtcppMode
-                ? $"{target}.{propertyName}({value})"
-                : base.PropertySet(target, propertyName, value);
-
         public override string FilledRegionDetermination(Mgcg.CanvasFilledRegionDetermination value)
         {
             switch (value)
@@ -79,45 +73,31 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         public override string ScopeResolve => "::";
 
-        public override string New => "ref new";
+        public override string New(string typeName) => $"ref new {typeName}";
 
         public override string Null => "nullptr";
 
         public override string Matrix3x2(Matrix3x2 value)
         {
-            return $"{{{Float(value.M11)}, {Float(value.M12)}, {Float(value.M21)}, {Float(value.M22)}, {Float(value.M31)}, {Float(value.M32)}}}";
+            return $"{{ {Float(value.M11)}, {Float(value.M12)}, {Float(value.M21)}, {Float(value.M22)}, {Float(value.M31)}, {Float(value.M32)} }}";
         }
 
         public override string Matrix4x4(Matrix4x4 value)
         {
-            return $"{{{Float(value.M11)}, {Float(value.M12)}, {Float(value.M13)}, {Float(value.M14)}, {Float(value.M21)}, {Float(value.M22)}, {Float(value.M23)}, {Float(value.M24)}, {Float(value.M31)}, {Float(value.M32)}, {Float(value.M33)}, {Float(value.M34)}, {Float(value.M41)}, {Float(value.M42)}, {Float(value.M43)}, {Float(value.M44)}}}";
+            return $"{{ {Float(value.M11)}, {Float(value.M12)}, {Float(value.M13)}, {Float(value.M14)}, {Float(value.M21)}, {Float(value.M22)}, {Float(value.M23)}, {Float(value.M24)}, {Float(value.M31)}, {Float(value.M32)}, {Float(value.M33)}, {Float(value.M34)}, {Float(value.M41)}, {Float(value.M42)}, {Float(value.M43)}, {Float(value.M44)} }}";
         }
 
         public override string Readonly(string value) => $"{value} const";
 
-        public override string ConstExprField(string type, string name, string value) => $"static constexpr {type} {name}{{{value}}};";
-
-        public override string ReferenceTypeName(string value)
-        {
-            if (_isWinrtcppMode)
-            {
-                return value == "CanvasGeometry"
-                    ? "CanvasGeometry" // CanvasGeometry is a typedef for ComPtr<GeoSource>, thus no hat pointer.
-                    : $"winrt::{value}";
-            }
-            else
-            {
-                return value == "CanvasGeometry"
-                    ? "CanvasGeometry" // CanvasGeometry is a typedef for ComPtr<GeoSource>, thus no hat pointer.
-                    : $"{value}^";
-            }
-        }
+        public override string ConstExprField(string type, string name, string value) => $"static constexpr {type} {name}{{ {value} }};";
 
         public override string TimeSpan(TimeSpan value) => TimeSpan(Int64(value.Ticks));
 
         public override string TimeSpan(string ticks) => $"{{ {ticks} }}";
 
         public override string Var => "auto";
+
+        public override string ConstVar => "const auto";
 
         public override string Vector2(Vector2 value) => $"{{ {Float(value.X)}, {Float(value.Y)} }}";
 

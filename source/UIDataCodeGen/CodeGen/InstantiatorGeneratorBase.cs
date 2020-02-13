@@ -79,7 +79,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             _disableFieldOptimization = disableFieldOptimization;
             _stringifier = stringifier;
 
-            _animatedVisualGenerators = graphs.Select(g => new AnimatedVisualGenerator(this, className, g.graphRoot, g.requiredUapVersion)).ToArray();
+            _animatedVisualGenerators = graphs.Select(g => new AnimatedVisualGenerator(this, g.graphRoot, g.requiredUapVersion, graphs.Count > 1)).ToArray();
 
             // The theme properties should be equivalent for each animated visual, so just
             // get them from the first animated visual.
@@ -298,7 +298,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         /// <param name="fieldName">The name of the Bytes field to be written.</param>
         protected void WriteBytesField(CodeBuilder builder, string fieldName)
         {
-            builder.WriteLine($"{_stringifier.Static} {_stringifier.Readonly(_stringifier.ReferenceTypeName(_stringifier.ByteArray))} {fieldName} = {_stringifier.New} {_stringifier.ByteArray}");
+            builder.WriteLine($"{_stringifier.Static} {_stringifier.Readonly(_stringifier.ReferenceTypeName(_stringifier.ByteArray))} {fieldName} = {_stringifier.New(_stringifier.ByteArray)}");
         }
 
         /// <summary>
@@ -460,10 +460,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             return name;
         }
 
-        static void WriteField(CodeBuilder builder, string typeName, string fieldName)
-        {
-            builder.WriteLine($"{typeName} {fieldName};");
-        }
+        void WriteInitializedField(CodeBuilder builder, string typeName, string fieldName, string initialization)
+            => builder.WriteLine($"{typeName} {fieldName}{initialization};");
+
+        void WriteDefaultInitializedField(CodeBuilder builder, string typeName, string fieldName)
+            => WriteInitializedField(builder, typeName, fieldName, _stringifier.DefaultInitialize);
 
         // Returns true iff the given sequence has exactly one item in it.
         // This is equivalent to Count() == 1, but doesn't require the whole
@@ -569,17 +570,15 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             }
         }
 
-        string ScopeResolve => _stringifier.ScopeResolve;
-
         string Deref => _stringifier.Deref;
 
-        string New => _stringifier.New;
+        string ConstVar => _stringifier.ConstVar;
+
+        string New(string typeName) => _stringifier.New(typeName);
 
         string ReferenceTypeName(string value) => _stringifier.ReferenceTypeName(value);
 
         string Static => _stringifier.Static;
-
-        string Var => _stringifier.Var;
 
         string IAnimatedVisualSourceInfo.ClassName => _className;
 
@@ -616,7 +615,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         {
             builder.WriteLine($"{_stringifier.ReferenceTypeName("JsonObject")} {factoryName}()");
             builder.OpenScope();
-            builder.WriteLine($"{_stringifier.Var} result = {New} JsonObject();");
+            builder.WriteLine($"{_stringifier.Var} result = {New("JsonObject")}();");
             WritePopulateJsonObject(builder, jsonData, "result", 0);
             builder.WriteLine($"return result;");
             builder.CloseScope();
@@ -647,13 +646,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                         case GenericDataObjectType.List:
                             if (((GenericDataList)value).Count == 0)
                             {
-                                builder.WriteLine($"{arrayName}{Deref}Append({New} JsonArray());");
+                                builder.WriteLine($"{arrayName}{Deref}Append({New("JsonArray")}());");
                             }
                             else
                             {
                                 var subArrayName = $"jarray_{recursionLevel}";
                                 builder.OpenScope();
-                                builder.WriteLine($"{_stringifier.Var} {subArrayName} = {New} JsonArray();");
+                                builder.WriteLine($"{_stringifier.Var} {subArrayName} = {New("JsonArray")}();");
                                 builder.WriteLine($"result{Deref}Append({subArrayName});");
                                 WritePopulateJsonArray(builder, (GenericDataList)value, subArrayName, recursionLevel + 1);
                                 builder.CloseScope();
@@ -663,13 +662,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                         case GenericDataObjectType.Map:
                             if (((GenericDataMap)value).Count == 0)
                             {
-                                builder.WriteLine($"{arrayName}{Deref}Append({New} JsonObject());");
+                                builder.WriteLine($"{arrayName}{Deref}Append({New("JsonObject")}());");
                             }
                             else
                             {
                                 var subObjectName = $"jobject_{recursionLevel}";
                                 builder.OpenScope();
-                                builder.WriteLine($"{_stringifier.Var} {subObjectName} = {New} JsonObject();");
+                                builder.WriteLine($"{_stringifier.Var} {subObjectName} = {New("JsonObject")}();");
                                 builder.WriteLine($"result{Deref}Append({subObjectName});");
                                 WritePopulateJsonObject(builder, (GenericDataMap)value, subObjectName, recursionLevel + 1);
                                 builder.CloseScope();
@@ -710,13 +709,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                         case GenericDataObjectType.List:
                             if (((GenericDataList)value).Count == 0)
                             {
-                                builder.WriteLine($"{objectName}{Deref}Add({k}, {New} JsonArray());");
+                                builder.WriteLine($"{objectName}{Deref}Add({k}, {New("JsonArray")}());");
                             }
                             else
                             {
                                 var subArrayName = $"jarray_{recursionLevel}";
                                 builder.OpenScope();
-                                builder.WriteLine($"{_stringifier.Var} {subArrayName} = {New} JsonArray();");
+                                builder.WriteLine($"{_stringifier.Var} {subArrayName} = {New("JsonArray")}();");
                                 builder.WriteLine($"result{Deref}Add({k}, {subArrayName});");
                                 WritePopulateJsonArray(builder, (GenericDataList)value, subArrayName, recursionLevel + 1);
                                 builder.CloseScope();
@@ -726,13 +725,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                         case GenericDataObjectType.Map:
                             if (((GenericDataMap)value).Count == 0)
                             {
-                                builder.WriteLine($"{objectName}{Deref}Add({k}, {New} JsonObject());");
+                                builder.WriteLine($"{objectName}{Deref}Add({k}, {New("JsonObject")}());");
                             }
                             else
                             {
                                 var subObjectName = $"jobject_{recursionLevel}";
                                 builder.OpenScope();
-                                builder.WriteLine($"{_stringifier.Var} {subObjectName} = {New} JsonObject();");
+                                builder.WriteLine($"{_stringifier.Var} {subObjectName} = {New("JsonObject")}();");
                                 builder.WriteLine($"result{Deref}Add({k}, {subObjectName});");
                                 WritePopulateJsonObject(builder, (GenericDataMap)value, subObjectName, recursionLevel + 1);
                                 builder.CloseScope();
@@ -847,18 +846,16 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         {
             builder.WriteLine($"{Static} void StartProgressBoundAnimation(");
             builder.Indent();
-            builder.Indent();
             builder.WriteLine($"{ReferenceTypeName("CompositionObject")} target,");
-            builder.WriteLine($"{ReferenceTypeName("String")} animatedPropertyName,");
+            builder.WriteLine($"{_stringifier.StringType} animatedPropertyName,");
             builder.WriteLine($"{ReferenceTypeName("CompositionAnimation")} animation,");
             builder.WriteLine($"{ReferenceTypeName("ExpressionAnimation")} controllerProgressExpression)");
             builder.UnIndent();
-            builder.UnIndent();
             builder.OpenScope();
             builder.WriteLine($"target{Deref}StartAnimation(animatedPropertyName, animation);");
-            builder.WriteLine($"{Var} controller = target{Deref}TryGetAnimationController(animatedPropertyName);");
+            builder.WriteLine($"{ConstVar} controller = target{Deref}TryGetAnimationController(animatedPropertyName);");
             builder.WriteLine($"controller{Deref}Pause();");
-            builder.WriteLine($"controller{Deref}StartAnimation(\"Progress\", controllerProgressExpression);");
+            builder.WriteLine($"controller{Deref}StartAnimation({String("Progress")}, controllerProgressExpression);");
             builder.CloseScope();
             builder.WriteLine();
         }
@@ -874,6 +871,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             readonly ObjectData _rootNode;
             readonly ObjectGraph<ObjectData> _objectGraph;
             readonly uint _requiredUapVersion;
+            readonly bool _isPartOfMultiVersionSource;
 
             // The subset of the object graph for which nodes will be generated.
             readonly ObjectData[] _nodes;
@@ -883,13 +881,14 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             internal AnimatedVisualGenerator(
                 InstantiatorGeneratorBase owner,
-                string className,
                 CompositionObject graphRoot,
-                uint requiredUapVersion)
+                uint requiredUapVersion,
+                bool isPartOfMultiVersionSource)
             {
                 _owner = owner;
                 _stringifier = _owner._stringifier;
                 _requiredUapVersion = requiredUapVersion;
+                _isPartOfMultiVersionSource = isPartOfMultiVersionSource;
 
                 // Build the object graph.
                 _objectGraph = ObjectGraph<ObjectData>.FromCompositionObject(graphRoot, includeVertices: true);
@@ -903,7 +902,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     node.ForceInline(() =>
                     {
                         var inlinedFactoryCode = CallFactoryFromFor(node, ((CompositionPath)node.Object).Source);
-                        return $"{New} CompositionPath({_stringifier.FactoryCall(inlinedFactoryCode)})";
+                        return $"{New("CompositionPath")}({_stringifier.FactoryCall(inlinedFactoryCode)})";
                     });
                 }
 
@@ -1025,13 +1024,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             string Deref => _stringifier.Deref;
 
-            string New => _stringifier.New;
+            string New(string typeName) => _stringifier.New(typeName);
 
             string Null => _stringifier.Null;
 
             string ReferenceTypeName(string value) => _stringifier.ReferenceTypeName(value);
 
-            string Var => _stringifier.Var;
+            string ConstVar => _stringifier.ConstVar;
 
             string Bool(bool value) => _stringifier.Bool(value);
 
@@ -1201,7 +1200,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             {
                 var canvasGeometry = _objectGraph[(CanvasGeometry)obj.Source];
                 WriteObjectFactoryStart(builder, node);
-                WriteCreateAssignment(builder, node, $"{New} CompositionPath({_stringifier.FactoryCall(canvasGeometry.FactoryCall())})");
+                WriteCreateAssignment(builder, node, $"{New("CompositionPath")}({_stringifier.FactoryCall(canvasGeometry.FactoryCall())})");
                 WriteObjectFactoryEnd(builder);
                 return true;
             }
@@ -1267,11 +1266,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                         builder.WriteLine($"if ({node.FieldName} != {Null}) {{ return {node.FieldName}; }}");
                     }
 
-                    builder.WriteLine($"{Var} result = {node.FieldName} = {createCallText};");
+                    builder.WriteLine($"{ConstVar} result = {node.FieldName} = {createCallText};");
                 }
                 else
                 {
-                    builder.WriteLine($"{Var} result = {createCallText};");
+                    builder.WriteLine($"{ConstVar} result = {createCallText};");
                 }
             }
 
@@ -1279,13 +1278,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             {
                 builder.WriteLine($"void BindProperty(");
                 builder.Indent();
-                builder.Indent();
                 builder.WriteLine($"{ReferenceTypeName("CompositionObject")} target,");
-                builder.WriteLine($"{ReferenceTypeName("String")} animatedPropertyName,");
-                builder.WriteLine($"{ReferenceTypeName("String")} expression,");
-                builder.WriteLine($"{ReferenceTypeName("String")} referenceParameterName,");
+                builder.WriteLine($"{_stringifier.StringType} animatedPropertyName,");
+                builder.WriteLine($"{_stringifier.StringType} expression,");
+                builder.WriteLine($"{_stringifier.StringType} referenceParameterName,");
                 builder.WriteLine($"{ReferenceTypeName("CompositionObject")} referencedObject)");
-                builder.UnIndent();
                 builder.UnIndent();
                 builder.OpenScope();
                 builder.WriteLine($"{SingletonExpressionAnimationName}{Deref}ClearAllParameters();");
@@ -1347,14 +1344,14 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                             // A single item. We can add the shape in a single line.
                             var shape = shapes[0];
                             builder.WriteComment(((IDescribable)shape).ShortDescription);
-                            builder.WriteLine($"result{Deref}Shapes{Deref}{IListAdd}({CallFactoryFromFor(node, shape)});");
+                            builder.WriteLine($"{_stringifier.PropertyGet("result", "Shapes")}{Deref}{IListAdd}({CallFactoryFromFor(node, shape)});");
                             break;
                         }
 
                     default:
                         {
                             // Multiple items requires the use of a local.
-                            builder.WriteLine($"{Var} shapes = result{Deref}Shapes;");
+                            builder.WriteLine($"{ConstVar} shapes = {_stringifier.PropertyGet("result", "Shapes")};");
                             foreach (var shape in shapes)
                             {
                                 builder.WriteComment(((IDescribable)shape).ShortDescription);
@@ -1379,12 +1376,12 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 // Write fields for each object that needs storage (i.e. objects that are referenced more than once).
                 // Write read-only fields first.
-                WriteField(builder, Readonly(_stringifier.ReferenceTypeName("Compositor")), "_c");
-                WriteField(builder, Readonly(_stringifier.ReferenceTypeName("ExpressionAnimation")), SingletonExpressionAnimationName);
+                _owner.WriteDefaultInitializedField(builder, Readonly(_stringifier.ReferenceTypeName("Compositor")), "_c");
+                _owner.WriteDefaultInitializedField(builder, Readonly(_stringifier.ReferenceTypeName("ExpressionAnimation")), SingletonExpressionAnimationName);
 
                 if (_owner._themeProperties != null)
                 {
-                    WriteField(builder, Readonly(_stringifier.ReferenceTypeName("CompositionPropertySet")), ThemePropertiesFieldName);
+                    _owner.WriteDefaultInitializedField(builder, Readonly(_stringifier.ReferenceTypeName("CompositionPropertySet")), ThemePropertiesFieldName);
                 }
 
                 WriteFields(builder);
@@ -1415,13 +1412,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 foreach (var node in OrderByName(_nodes.Where(n => n.RequiresReadonlyStorage)))
                 {
                     // Generate a field for the read-only storage.
-                    WriteField(builder, Readonly(_stringifier.ReferenceTypeName(node.TypeName)), node.FieldName);
+                    _owner.WriteDefaultInitializedField(builder, Readonly(_stringifier.ReferenceTypeName(node.TypeName)), node.FieldName);
                 }
 
                 foreach (var node in OrderByName(_nodes.Where(n => n.RequiresStorage && !n.RequiresReadonlyStorage)))
                 {
-                    // Generate a field for the storage.
-                    WriteField(builder, _stringifier.ReferenceTypeName(node.TypeName), node.FieldName);
+                    // Generate a field for the non-read-only storage.
+                    _owner.WriteDefaultInitializedField(builder, _stringifier.ReferenceTypeName(node.TypeName), node.FieldName);
                 }
             }
 
@@ -1798,7 +1795,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     if (!controllerVariableAdded)
                     {
                         // Declare and initialize the controller variable.
-                        builder.WriteLine($"{Var} controller = {localName}{Deref}TryGetAnimationController({String(animator.AnimatedProperty)});");
+                        builder.WriteLine($"{ConstVar} controller = {localName}{Deref}TryGetAnimationController({String(animator.AnimatedProperty)});");
                         controllerVariableAdded = true;
                     }
                     else
@@ -1849,7 +1846,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 else
                 {
                     builder.WriteLine($"{SingletonExpressionAnimationName}{Deref}ClearAllParameters();");
-                    builder.WriteLine($"{SingletonExpressionAnimationName}{Deref}Expression = {String(animation.Expression)};");
+                    builder.WriteLine($"{_stringifier.PropertySet(SingletonExpressionAnimationName, "Expression", String(animation.Expression))};");
 
                     // If there is a Target set it. Note however that the Target isn't used for anything
                     // interesting in this scenario, and there is no way to reset the Target to an
@@ -1922,7 +1919,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 if (propertySet.Names.Count > 0)
                 {
-                    builder.WriteLine($"{Var} propertySet = {_stringifier.PropertyGet(localName, "Properties")};");
+                    builder.WriteLine($"{ConstVar} propertySet = {_stringifier.PropertyGet(localName, "Properties")};");
                     _owner.WritePropertySetInitialization(builder, propertySet, "propertySet");
                 }
             }
@@ -1985,7 +1982,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 if (obj.ColorStops.Count > 0)
                 {
-                    builder.WriteLine($"{Var} colorStops = result{Deref}ColorStops;");
+                    builder.WriteLine($"{ConstVar} colorStops = {_stringifier.PropertyGet("result", "ColorStops")};");
                     foreach (var colorStop in obj.ColorStops)
                     {
                         builder.WriteLine($"colorStops{Deref}{IListAdd}({CallFactoryFromFor(node, colorStop)});");
@@ -2048,14 +2045,14 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                             // A single child. We can add the child in a single line.
                             var child = obj.Children[0];
                             builder.WriteComment(((IDescribable)child).ShortDescription);
-                            builder.WriteLine($"result{Deref}Children{Deref}InsertAtTop({CallFactoryFromFor(node, child)});");
+                            builder.WriteLine($"{_stringifier.PropertyGet("result", "Children")}{Deref}InsertAtTop({CallFactoryFromFor(node, child)});");
                             break;
                         }
 
                     default:
                         {
                             // Multiple children requires the use of a local.
-                            builder.WriteLine($"{Var} children = result{Deref}Children;");
+                            builder.WriteLine($"{ConstVar} children = {_stringifier.PropertyGet("result", "Children")};");
                             foreach (var child in obj.Children)
                             {
                                 builder.WriteComment(((IDescribable)child).ShortDescription);
@@ -2439,7 +2436,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                         throw new InvalidOperationException();
                 }
 
-                builder.WriteLine($"{Var} effectFactory = _c{Deref}CreateEffectFactory({effectCreationString});");
+                builder.WriteLine($"{ConstVar} effectFactory = _c{Deref}CreateEffectFactory({effectCreationString});");
                 WriteCreateAssignment(builder, node, $"effectFactory{Deref}CreateBrush()");
                 InitializeCompositionBrush(builder, obj, node);
 
@@ -2503,7 +2500,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 if (obj.StrokeDashArray.Count > 0)
                 {
-                    builder.WriteLine($"{Var} strokeDashArray = result{Deref}StrokeDashArray;");
+                    builder.WriteLine($"{ConstVar} strokeDashArray = {_stringifier.PropertyGet("result", "StrokeDashArray")};");
                     foreach (var strokeDash in obj.StrokeDashArray)
                     {
                         builder.WriteLine($"strokeDashArray{Deref}{IListAdd}({Float(strokeDash)});");
@@ -2598,7 +2595,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             IAnimatedVisualSourceInfo IAnimatedVisualInfo.AnimatedVisualSourceInfo => _owner;
 
-            string IAnimatedVisualInfo.ClassName => $"AnimatedVisual_UAPv{_requiredUapVersion}";
+            string IAnimatedVisualInfo.ClassName => "AnimatedVisual" + (_isPartOfMultiVersionSource ? $"_UAPv{_requiredUapVersion}" : string.Empty);
 
             IReadOnlyList<LoadedImageSurfaceInfo> IAnimatedVisualInfo.LoadedImageSurfaceNodes => GetLoadedImageSurfaceInfos().ToArray();
 

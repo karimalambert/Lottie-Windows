@@ -22,6 +22,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 #endif
     class Stringifier
     {
+        public virtual string DefaultInitialize => string.Empty;
+
         public virtual string Deref => ".";
 
         public virtual string IListAdd => "Add";
@@ -30,13 +32,15 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         public virtual string Int64TypeName => "long";
 
-        public virtual string New => "new";
+        public virtual string New(string typeName) => $"new {typeName}";
 
         public virtual string Null => "null";
 
         public virtual string ScopeResolve => ".";
 
         public virtual string Var => "var";
+
+        public virtual string ConstVar => "var";
 
         public string Const(string value) => $"const {value}";
 
@@ -92,6 +96,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         public virtual string Vector4(Vector4 value) => $"new Vector4({Float(value.X)}, {Float(value.Y)}, {Float(value.Z)}, {Float(value.W)})";
 
         public string Static => "static";
+
+        public virtual string StringType => "string";
 
         public virtual string ByteArray => "byte[]";
 

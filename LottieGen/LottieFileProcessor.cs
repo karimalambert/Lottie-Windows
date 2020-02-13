@@ -134,6 +134,11 @@ sealed class LottieFileProcessor
                     _profiler.OnCodeGenFinished();
                     break;
 
+                case Lang.CppWinrt:
+                    codeGenSucceeded &= TryGenerateCppwinrtCode($"{outputFileBase}.h", $"{outputFileBase}.cpp");
+                    _profiler.OnCodeGenFinished();
+                    break;
+
                 case Lang.LottieXml:
                     codeGenSucceeded &= TryGenerateLottieXml($"{outputFileBase}-Lottie.xml");
                     _profiler.OnSerializationFinished();
@@ -430,7 +435,7 @@ sealed class LottieFileProcessor
         return result;
     }
 
-    bool TryGenerateCXCode(
+    bool TryGenerateCppwinrtCode(
         string outputHeaderFilePath,
         string outputCppFilePath)
     {
@@ -447,7 +452,62 @@ sealed class LottieFileProcessor
                 (float)_lottieComposition.Height,
                 _lottieComposition.Duration,
                 System.IO.Path.GetFileName(outputHeaderFilePath),
-                _options.DisableCodeGenOptimizer);
+                _options.DisableCodeGenOptimizer,
+                isCppwinrtMode: true);
+
+        if (string.IsNullOrWhiteSpace(cppText))
+        {
+            _reporter.WriteError("Failed to generate the .cpp code.");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(hText))
+        {
+            _reporter.WriteError("Failed to generate the .h code.");
+            return false;
+        }
+
+        if (!TryWriteTextFile(outputHeaderFilePath, hText))
+        {
+            return false;
+        }
+
+        if (!TryWriteTextFile(outputCppFilePath, cppText))
+        {
+            return false;
+        }
+
+        _reporter.WriteInfo($"Header code for class {_className} written to {outputHeaderFilePath}");
+        _reporter.WriteInfo($"Source code for class {_className} written to {outputCppFilePath}");
+
+        if (assetList != null)
+        {
+            // Write out the list of asset files referenced by the code.
+            WriteAssetFiles(assetList);
+        }
+
+        return true;
+    }
+
+    bool TryGenerateCXCode(
+    string outputHeaderFilePath,
+    string outputCppFilePath)
+    {
+        if (!TryEnsureTranslated())
+        {
+            return false;
+        }
+
+        (string cppText, string hText, IEnumerable<Uri> assetList) = CxInstantiatorGenerator.CreateFactoryCode(
+                _className,
+                _translationResults.Select(tr => ((CompositionObject)tr.RootVisual, tr.MinimumRequiredUapVersion)).ToArray(),
+                _translationResults[0].SourceMetadata,
+                (float)_lottieComposition.Width,
+                (float)_lottieComposition.Height,
+                _lottieComposition.Duration,
+                System.IO.Path.GetFileName(outputHeaderFilePath),
+                _options.DisableCodeGenOptimizer,
+                isCppwinrtMode: false);
 
         if (string.IsNullOrWhiteSpace(cppText))
         {
