@@ -120,6 +120,9 @@ sealed class LottieFileProcessor
         var outputFileBase = System.IO.Path.Combine(_outputFolder, System.IO.Path.GetFileNameWithoutExtension(_file));
 
         var codeGenSucceeded = true;
+
+        var isCppwinrtAndCxRequested = _options.Languages.Where(l => l == Lang.CppWinrt || l == Lang.Cx).Count() == 2;
+
         foreach (var lang in _options.Languages)
         {
             switch (lang)
@@ -130,7 +133,13 @@ sealed class LottieFileProcessor
                     break;
 
                 case Lang.Cx:
-                    codeGenSucceeded &= TryGenerateCXCode($"{outputFileBase}.h", $"{outputFileBase}.cpp");
+                    // If both cppwinrt and cx files were requested, add a differentiator to
+                    // the filenames of the cx files to make their names distinct from the
+                    // cppwinrt filenames. This ensures the cx doesn't overwrite the cppwinrt
+                    // while still making the cx have normal-looking names in the common case
+                    // where only one of the languages is specified.
+                    var cxDifferentiator = isCppwinrtAndCxRequested ? ".cx" : string.Empty;
+                    codeGenSucceeded &= TryGenerateCXCode($"{outputFileBase}{cxDifferentiator}.h", $"{outputFileBase}{cxDifferentiator}.cpp");
                     _profiler.OnCodeGenFinished();
                     break;
 
@@ -477,8 +486,8 @@ sealed class LottieFileProcessor
             return false;
         }
 
-        _reporter.WriteInfo($"Header code for class {_className} written to {outputHeaderFilePath}");
-        _reporter.WriteInfo($"Source code for class {_className} written to {outputCppFilePath}");
+        _reporter.WriteInfo($"Cppwinrt header for class {_className} written to {outputHeaderFilePath}");
+        _reporter.WriteInfo($"Cppwinrt source for class {_className} written to {outputCppFilePath}");
 
         if (assetList != null)
         {
@@ -531,8 +540,8 @@ sealed class LottieFileProcessor
             return false;
         }
 
-        _reporter.WriteInfo($"Header code for class {_className} written to {outputHeaderFilePath}");
-        _reporter.WriteInfo($"Source code for class {_className} written to {outputCppFilePath}");
+        _reporter.WriteInfo($"CX header for class {_className} written to {outputHeaderFilePath}");
+        _reporter.WriteInfo($"CX source for class {_className} written to {outputCppFilePath}");
 
         if (assetList != null)
         {
