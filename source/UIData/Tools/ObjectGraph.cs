@@ -490,8 +490,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
         bool VisitCompositionSpriteShape(CompositionSpriteShape obj, T node)
         {
             VisitCompositionShape(obj, node);
-            Reference(node, obj.FillBrush);
+
+            // The .Geometry must be visited first it is a constructor parameter
+            // and therefore will be called before any properties are set.
             Reference(node, obj.Geometry);
+            Reference(node, obj.FillBrush);
             Reference(node, obj.StrokeBrush);
             return true;
         }

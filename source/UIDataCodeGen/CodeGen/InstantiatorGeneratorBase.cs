@@ -49,6 +49,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         // The name of the IAnimatedVisualSource class.
         readonly string _className;
+        readonly string _namespace;
         readonly Vector2 _compositionDeclaredSize;
         readonly TimeSpan _compositionDuration;
         readonly bool _setCommentProperties;
@@ -62,22 +63,20 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         AnimatedVisualGenerator _currentAnimatedVisualGenerator;
 
         protected InstantiatorGeneratorBase(
-            string className,
-            Vector2 compositionDeclaredSize,
-            IReadOnlyList<(CompositionObject graphRoot, uint requiredUapVersion)> graphs,
-            IReadOnlyDictionary<Guid, object> sourceMetadata,
-            TimeSpan duration,
+            CodegenConfiguration configuration,
             bool setCommentProperties,
-            bool disableFieldOptimization,
             Stringifier stringifier)
         {
-            _className = className;
-            _compositionDeclaredSize = compositionDeclaredSize;
-            _sourceMetadata = new SourceMetadata(sourceMetadata);
-            _compositionDuration = duration;
+            _className = configuration.ClassName;
+            _namespace = configuration.Namespace ?? "AnimatedVisuals";
+            _compositionDeclaredSize = new Vector2((float)configuration.Width, (float)configuration.Height);
+            _sourceMetadata = new SourceMetadata(configuration.SourceMetadata);
+            _compositionDuration = configuration.Duration;
             _setCommentProperties = setCommentProperties;
-            _disableFieldOptimization = disableFieldOptimization;
+            _disableFieldOptimization = configuration.DisableOptimization;
             _stringifier = stringifier;
+
+            var graphs = configuration.ObjectGraphs;
 
             _animatedVisualGenerators = graphs.Select(g => new AnimatedVisualGenerator(this, g.graphRoot, g.requiredUapVersion, graphs.Count > 1)).ToArray();
 
@@ -126,7 +125,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                     if (imageUri.IsFile)
                     {
-                        canonicalNode.LoadedImageSurfaceImageUri = new Uri($"ms-appx:///Assets/{className}{imageUri.AbsolutePath}");
+                        canonicalNode.LoadedImageSurfaceImageUri = new Uri($"ms-appx:///Assets/{_className}{imageUri.AbsolutePath}");
                     }
                 }
 
@@ -581,6 +580,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         string Static => _stringifier.Static;
 
         string IAnimatedVisualSourceInfo.ClassName => _className;
+
+        string IAnimatedVisualSourceInfo.Namespace => _namespace;
 
         string IAnimatedVisualSourceInfo.ReusableExpressionAnimationFieldName => SingletonExpressionAnimationName;
 
@@ -1198,8 +1199,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             bool GenerateCompositionPathFactory(CodeBuilder builder, CompositionPath obj, ObjectData node)
             {
-                var canvasGeometry = _objectGraph[(CanvasGeometry)obj.Source];
                 WriteObjectFactoryStart(builder, node);
+                var canvasGeometry = _objectGraph[(CanvasGeometry)obj.Source];
                 WriteCreateAssignment(builder, node, $"{New("CompositionPath")}({_stringifier.FactoryCall(canvasGeometry.FactoryCall())})");
                 WriteObjectFactoryEnd(builder);
                 return true;
@@ -1484,7 +1485,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             bool GenerateObjectFactory(CodeBuilder builder, CompositionObject obj, ObjectData node)
             {
                 // Uncomment to see the order of creation.
-                //builder.WriteComment($"Traversal order: {node.Position}");
+                builder.WriteComment($"Traversal order: {node.Position}");
                 switch (obj.Type)
                 {
                     case CompositionObjectType.AnimationController:

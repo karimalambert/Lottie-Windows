@@ -38,6 +38,8 @@ sealed class CommandLineOptions
 
     internal string OutputFolder { get; private set; }
 
+    internal string Namespace { get; private set; }
+
     internal bool StrictMode { get; private set; }
 
     internal bool HelpRequested { get; private set; }
@@ -57,6 +59,7 @@ sealed class CommandLineOptions
         Help,
         InputFile,
         Language,
+        Namespace,
         OutputFolder,
         Strict,
         DisableTranslationOptimizer,
@@ -115,6 +118,7 @@ sealed class CommandLineOptions
             .AddPrefixedKeyword("help", Keyword.Help)
             .AddPrefixedKeyword("inputfile", Keyword.InputFile)
             .AddPrefixedKeyword("language", Keyword.Language)
+            .AddPrefixedKeyword("namespace", Keyword.Namespace)
             .AddPrefixedKeyword("outputfolder", Keyword.OutputFolder)
             .AddPrefixedKeyword("strict", Keyword.Strict)
             .AddPrefixedKeyword("disablecodegenoptimizer", Keyword.DisableCodeGenOptimizer)
@@ -158,6 +162,7 @@ sealed class CommandLineOptions
                         // The following keywords require a parameter as the next token.
                         case Keyword.InputFile:
                         case Keyword.Language:
+                        case Keyword.Namespace:
                         case Keyword.OutputFolder:
                         case Keyword.MinimumUapVersion:
                         case Keyword.TargetUapVersion:
@@ -181,6 +186,15 @@ sealed class CommandLineOptions
                     break;
                 case Keyword.Language:
                     _languageStrings.Add(arg);
+                    break;
+                case Keyword.Namespace:
+                    if (Namespace != null)
+                    {
+                        ErrorDescription = ArgumentSpecifiedMoreThanOnce("Namespace");
+                        return;
+                    }
+
+                    Namespace = arg;
                     break;
                 case Keyword.OutputFolder:
                     if (OutputFolder != null)

@@ -8,8 +8,11 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)CodeGen\AlphanumericStringComparer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)CodeGen\CodeBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)CodeGen\CodegenConfiguration.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)CodeGen\CppInstantiatorGeneratorBase.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)CodeGen\CppStringifier.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)CodeGen\CppWinrtStringifier.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)CodeGen\CppwinrtInstantiatorGenerator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)CodeGen\CppwinrtStringifier.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)CodeGen\CSharpInstantiatorGenerator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)CodeGen\CxInstantiatorGenerator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)CodeGen\CxStringifier.cs" />

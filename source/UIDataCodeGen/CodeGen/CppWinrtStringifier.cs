@@ -7,9 +7,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
     /// <summary>
     /// Stringifiers for C++/WinRT syntax.
     /// </summary>
-    sealed class CppWinrtStringifier : CppStringifier
+    sealed class CppwinrtStringifier : CppStringifier
     {
-        internal CppWinrtStringifier()
+        internal CppwinrtStringifier()
         {
         }
 
