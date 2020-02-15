@@ -72,7 +72,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
                 CanonicalizeExpressionAnimations();
 
-                CanonicalizeKeyFrameAnimations<CompositionPath, Expr.Void>(CompositionObjectType.PathKeyFrameAnimation);
+                CanonicalizeKeyFrameAnimations<CompositionPath, Expr.Void>(CompositionObjectType.PathKeyFrameAnimation, CompositionPathEqualityComparer);
                 CanonicalizeKeyFrameAnimations<Wui.Color, Expr.Color>(CompositionObjectType.ColorKeyFrameAnimation);
                 CanonicalizeKeyFrameAnimations<float, Expr.Scalar>(CompositionObjectType.ScalarKeyFrameAnimation);
                 CanonicalizeKeyFrameAnimations<Sn.Vector2, Expr.Vector2>(CompositionObjectType.Vector2KeyFrameAnimation);
@@ -187,28 +187,46 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
             void CanonicalizeKeyFrameAnimations<TKFA, TExpression>(CompositionObjectType animationType)
                 where TExpression : Expr.Expression_<TExpression>
+                => CanonicalizeKeyFrameAnimations<TKFA, TExpression>(animationType, SimpleEqualityComparer<TKFA>);
+
+            void CanonicalizeKeyFrameAnimations<TKFA, TExpression>(
+                CompositionObjectType animationType,
+                Func<TKFA, TKFA, bool> equalityComparer)
+                where TExpression : Expr.Expression_<TExpression>
             {
                 var items = GetCanonicalizableCompositionObjects<KeyFrameAnimation<TKFA, TExpression>>(animationType);
 
                 var grouping =
                     from item in items
-                    group item.Node by new KeyFrameAnimationKey<TKFA, TExpression>(this, item.Object)
+                    group item.Node by new KeyFrameAnimationKey<TKFA, TExpression>(this, item.Object, equalityComparer)
                     into grouped
                     select grouped;
 
                 CanonicalizeGrouping(grouping);
             }
 
+            // Returns true if the a and b are the same CompositionObject after canonicalization.
+            bool CompositionPathEqualityComparer(CompositionPath a, CompositionPath b)
+                => ReferenceEquals(NodeFor(a), NodeFor(b));
+
+            bool SimpleEqualityComparer<T>(T a, T b)
+                => a.Equals(b);
+
             sealed class KeyFrameAnimationKey<TKFA, TExpression>
                 where TExpression : Expr.Expression_<TExpression>
             {
                 readonly CanonicalizerWorker<TNode> _owner;
                 readonly KeyFrameAnimation<TKFA, TExpression> _obj;
+                readonly Func<TKFA, TKFA, bool> _equalityComparer;
 
-                internal KeyFrameAnimationKey(CanonicalizerWorker<TNode> owner, KeyFrameAnimation<TKFA, TExpression> obj)
+                internal KeyFrameAnimationKey(
+                    CanonicalizerWorker<TNode> owner,
+                    KeyFrameAnimation<TKFA, TExpression> obj,
+                    Func<TKFA, TKFA, bool> equalityComparer)
                 {
                     _owner = owner;
                     _obj = obj;
+                    _equalityComparer = equalityComparer;
                 }
 
                 public override int GetHashCode()
@@ -289,19 +307,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                             case KeyFrameType.Value:
                                 var thisValueKeyFrame = (KeyFrameAnimation<TKFA, TExpression>.ValueKeyFrame)thisKf;
                                 var otherValueKeyFrame = (KeyFrameAnimation<TKFA, TExpression>.ValueKeyFrame)otherKf;
-
-                                // Special handling needed for CompositionPath key frames because they contain
-                                // values (i.e. CompositionPaths) that can be canonicalized.
-                                if (typeof(TKFA) == typeof(CompositionPath))
-                                {
-                                    var thisPath = _owner.NodeFor((CompositionPath)(object)thisValueKeyFrame.Value);
-                                    var otherPath = _owner.NodeFor((CompositionPath)(object)otherValueKeyFrame.Value);
-                                    if (thisPath != otherPath)
-                                    {
-                                        return false;
-                                    }
-                                }
-                                else if (!thisValueKeyFrame.Value.Equals(otherValueKeyFrame.Value))
+                                if (!_equalityComparer(thisValueKeyFrame.Value, otherValueKeyFrame.Value))
                                 {
                                     return false;
                                 }
