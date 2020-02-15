@@ -21,7 +21,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         static readonly Guid s_lottieMetadataKey = new Guid("EA3D6538-361A-4B1C-960D-50A6C35563A5");
 
         readonly IReadOnlyDictionary<Guid, object> _sourceMetadata;
-        IReadOnlyList<(string bindingName, PropertySetValueType actualType, PropertySetValueType exposedType)> _propertyBindings;
+        IReadOnlyList<(string bindingName, PropertySetValueType actualType, PropertySetValueType exposedType, object initialValue)> _propertyBindings;
         Lottie _lottieMetadata;
 
         internal SourceMetadata(IReadOnlyDictionary<Guid, object> sourceMetadata)
@@ -31,10 +31,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         internal Lottie LottieMetadata => _lottieMetadata ?? (_lottieMetadata = new Lottie(this));
 
-        internal IReadOnlyList<(string bindingName, PropertySetValueType actualType, PropertySetValueType exposedType)> PropertyBindings
+        internal IReadOnlyList<(string bindingName, PropertySetValueType actualType, PropertySetValueType exposedType, object initialValue)> PropertyBindings
             => _propertyBindings ?? (_propertyBindings = _sourceMetadata.TryGetValue(s_propertyBindingNamesKey, out var propertyBindingNames)
-                ? (IReadOnlyList<(string bindingName, PropertySetValueType actualType, PropertySetValueType exposedType)>)propertyBindingNames
-                : Array.Empty<(string bindingName, PropertySetValueType actualType, PropertySetValueType exposedType)>());
+                ? (IReadOnlyList<(string bindingName, PropertySetValueType actualType, PropertySetValueType exposedType, object initialValue)>)propertyBindingNames
+                : Array.Empty<(string bindingName, PropertySetValueType actualType, PropertySetValueType exposedType, object initialValue)>());
 
         internal sealed class Lottie
         {

@@ -24,6 +24,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
     {
         public virtual string DefaultInitialize => string.Empty;
 
+        public virtual string VariableInitialization(string value) => $" = {value}";
+
         public virtual string Deref => ".";
 
         public virtual string IListAdd => "Add";

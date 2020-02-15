@@ -2838,11 +2838,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             {
                 case CompositionGetValueStatus.NotFound:
                     // The property hasn't been added yet. Add it.
-                    themeProperties.InsertVector4(bindingName, Vector4(Color(defaultColor)));
+                    var defaultColorColor = Color(defaultColor);
+                    themeProperties.InsertVector4(bindingName, Vector4(defaultColorColor));
                     _propertyBindings.AddPropertyBinding(
                         bindingName,
                         actualType: PropertySetValueType.Vector4,
-                        exposedType: PropertySetValueType.Color);
+                        exposedType: PropertySetValueType.Color,
+                        defaultValue: defaultColorColor);
                     break;
 
                 case CompositionGetValueStatus.Succeeded:

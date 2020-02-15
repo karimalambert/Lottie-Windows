@@ -758,5 +758,5 @@ sealed class LottieFileProcessor
     }
 
     // Convert namespaces to a normalized form: replace "::" with ".".
-    static string NormalizeNamespace(string @namespace) => @namespace.Replace("::", ".");
+    static string NormalizeNamespace(string @namespace) => @namespace?.Replace("::", ".");
 }

@@ -405,6 +405,16 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             // Generate the methods that create and get the theme property set.
             if (info.IsThemed)
             {
+                if (info.SourceMetadata.PropertyBindings.Any(pb => pb.exposedType == WinCompData.MetaData.PropertySetValueType.Color))
+                {
+                    // There's at least one themed color. They will need a helper method to convert to Vector4.
+                    builder.WriteLine("float4 ColorAsVector4(Color color)");
+                    builder.OpenScope();
+                    builder.WriteLine("return { color.R, color.G, color.B, color.A };");
+                    builder.CloseScope();
+                    builder.WriteLine();
+                }
+
                 builder.WriteLine($"{_typeName.CompositionPropertySet} {_s.Namespace(info.Namespace)}::{info.ClassName}::EnsureThemeProperties({_typeName.Compositor} compositor)");
                 builder.OpenScope();
                 builder.WriteLine($"if ({info.ThemePropertiesFieldName} == nullptr)");
@@ -412,6 +422,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 builder.WriteLine($"{info.ThemePropertiesFieldName} = compositor{_s.Deref}CreatePropertySet();");
                 WriteThemePropertySetInitialization(builder, info.ThemePropertiesFieldName);
                 builder.CloseScope();
+                builder.WriteLine();
                 builder.WriteLine($"return {info.ThemePropertiesFieldName};");
                 builder.CloseScope();
                 builder.WriteLine();
@@ -848,7 +859,25 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             if (info.IsThemed)
             {
+                // Add a field to hold the theme property set.
                 builder.WriteLine($"{wuc}::{_typeName.CompositionPropertySet} {info.ThemePropertiesFieldName}{{ nullptr }};");
+
+                // Add fields for each of the theme properties.
+                foreach (var prop in info.SourceMetadata.PropertyBindings)
+                {
+                    var (exposedTypeName, initialValue) = prop.exposedType switch
+                    {
+                        WinCompData.MetaData.PropertySetValueType.Color => ("Windows::UI::Color", _s.Color((WinCompData.Wui.Color)prop.initialValue)),
+                        WinCompData.MetaData.PropertySetValueType.Scalar => ("float", _s.Float((float)prop.initialValue)),
+                        WinCompData.MetaData.PropertySetValueType.Vector2 => ("float2", _s.Vector2((Vector2)prop.initialValue)),
+                        WinCompData.MetaData.PropertySetValueType.Vector3 => ("float3", _s.Vector3((Vector3)prop.initialValue)),
+                        WinCompData.MetaData.PropertySetValueType.Vector4 => ("float4", _s.Vector4((Vector4)prop.initialValue)),
+                        _ => throw new InvalidOperationException(),
+                    };
+
+                    WriteInitializedField(builder, exposedTypeName, $"_theme{prop.bindingName}", _s.VariableInitialization(initialValue));
+                }
+
                 builder.WriteLine();
                 builder.WriteLine($"{wuc}::{_typeName.CompositionPropertySet} EnsureThemeProperties({wuc}::{_typeName.Compositor} compositor);");
                 builder.WriteLine();
