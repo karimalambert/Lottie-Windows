@@ -235,18 +235,18 @@ OVERVIEW:
          -DisableCodeGenOptimizer
                        Disables optimization done by the code generator. This is 
                        useful when the generated code is going to be hacked on.
-         -OutputFolder Specifies the output folder for the generated files. If not
-                       specified the files will be written to the current directory.
-         -Namespace    Specifies the namespace for the generated code.
-         -Strict       Fails on any parsing or translation issue. If not specified, 
-                       a best effort will be made to create valid output, and any 
-                       issues will be reported to STDOUT.
          -MinimumUapVersion
                        The lowest UAP version on which the result must run. Defaults 
                        to 7. Must be 7 or higher. Code will be generated that will
                        run down to this version. If less than TargetUapVersion,
                        extra code will be generated if necessary to support the
                        lower versions.
+         -Namespace    Specifies the namespace for the generated code.
+         -OutputFolder Specifies the output folder for the generated files. If not
+                       specified the files will be written to the current directory.
+         -Strict       Fails on any parsing or translation issue. If not specified, 
+                       a best effort will be made to create valid output, and any 
+                       issues will be reported to STDOUT.
          -TargetUapVersion
                        The target UAP version on which the result will run. Must be 7
                        or higher and >= MinimumUapVersion. Code will be generated
