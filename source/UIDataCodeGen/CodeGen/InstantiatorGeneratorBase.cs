@@ -307,7 +307,18 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         /// <param name="variableName">The variable holding the property set.</param>
         protected void WriteThemePropertySetInitialization(CodeBuilder builder, string variableName)
         {
-            WritePropertySetInitialization(builder, _themeProperties, variableName);
+            // WritePropertySetInitialization(builder, _themeProperties, variableName);
+            foreach (var prop in _sourceMetadata.PropertyBindings)
+            {
+                var themePropertyBackingField = $"_theme{prop.bindingName}";
+                if (prop.exposedType == WinCompData.MetaData.PropertySetValueType.Color)
+                {
+                    // Colors are converted to Vector4s.
+                    themePropertyBackingField = $"ColorAsVector4({themePropertyBackingField})";
+                }
+
+                builder.WriteLine($"{variableName}{Deref}Insert{PropertySetValueType(prop.actualType)}({String(prop.bindingName)}, {themePropertyBackingField});");
+            }
         }
 
         void WritePropertySetInitialization(CodeBuilder builder, CompositionPropertySet propertySet, string variableName)
@@ -358,7 +369,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             {
                 yield return "===========";
                 yield return "Property bindings:";
-                foreach (var (name, actualType, exposedType) in names)
+                foreach (var (name, actualType, exposedType, _) in names)
                 {
                     if (actualType != exposedType)
                     {
@@ -459,7 +470,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             return name;
         }
 
-        void WriteInitializedField(CodeBuilder builder, string typeName, string fieldName, string initialization)
+        protected void WriteInitializedField(CodeBuilder builder, string typeName, string fieldName, string initialization)
             => builder.WriteLine($"{typeName} {fieldName}{initialization};");
 
         void WriteDefaultInitializedField(CodeBuilder builder, string typeName, string fieldName)

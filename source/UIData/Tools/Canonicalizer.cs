@@ -72,6 +72,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
                 CanonicalizeExpressionAnimations();
 
+                CanonicalizeKeyFrameAnimations<CompositionPath, Expr.Void>(CompositionObjectType.PathKeyFrameAnimation);
                 CanonicalizeKeyFrameAnimations<Wui.Color, Expr.Color>(CompositionObjectType.ColorKeyFrameAnimation);
                 CanonicalizeKeyFrameAnimations<float, Expr.Scalar>(CompositionObjectType.ScalarKeyFrameAnimation);
                 CanonicalizeKeyFrameAnimations<Sn.Vector2, Expr.Vector2>(CompositionObjectType.Vector2KeyFrameAnimation);
@@ -288,7 +289,19 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                             case KeyFrameType.Value:
                                 var thisValueKeyFrame = (KeyFrameAnimation<TKFA, TExpression>.ValueKeyFrame)thisKf;
                                 var otherValueKeyFrame = (KeyFrameAnimation<TKFA, TExpression>.ValueKeyFrame)otherKf;
-                                if (!thisValueKeyFrame.Value.Equals(otherValueKeyFrame.Value))
+
+                                // Special handling needed for CompositionPath key frames because they contain
+                                // values (i.e. CompositionPaths) that can be canonicalized.
+                                if (typeof(TKFA) == typeof(CompositionPath))
+                                {
+                                    var thisPath = _owner.NodeFor((CompositionPath)(object)thisValueKeyFrame.Value);
+                                    var otherPath = _owner.NodeFor((CompositionPath)(object)otherValueKeyFrame.Value);
+                                    if (thisPath != otherPath)
+                                    {
+                                        return false;
+                                    }
+                                }
+                                else if (!thisValueKeyFrame.Value.Equals(otherValueKeyFrame.Value))
                                 {
                                     return false;
                                 }

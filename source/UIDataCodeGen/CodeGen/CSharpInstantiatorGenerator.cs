@@ -138,6 +138,23 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             if (info.IsThemed)
             {
                 builder.WriteLine($"CompositionPropertySet {info.ThemePropertiesFieldName};");
+
+                // Add fields for each of the theme properties.
+                foreach (var prop in info.SourceMetadata.PropertyBindings)
+                {
+                    var (exposedTypeName, initialValue) = prop.exposedType switch
+                    {
+                        WinCompData.MetaData.PropertySetValueType.Color => ("Color", _s.Color((WinCompData.Wui.Color)prop.initialValue)),
+                        WinCompData.MetaData.PropertySetValueType.Scalar => ("float", _s.Float((float)prop.initialValue)),
+                        WinCompData.MetaData.PropertySetValueType.Vector2 => ("Vector2", _s.Vector2((Vector2)prop.initialValue)),
+                        WinCompData.MetaData.PropertySetValueType.Vector3 => ("Vector3", _s.Vector3((Vector3)prop.initialValue)),
+                        WinCompData.MetaData.PropertySetValueType.Vector4 => ("Vector4", _s.Vector4((Vector4)prop.initialValue)),
+                        _ => throw new InvalidOperationException(),
+                    };
+
+                    WriteInitializedField(builder, exposedTypeName, $"_theme{prop.bindingName}", _s.VariableInitialization(initialValue));
+                }
+
                 builder.WriteLine();
                 builder.WriteLine("public CompositionPropertySet GetThemeProperties(Compositor compositor)");
                 builder.OpenScope();
@@ -145,6 +162,14 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 builder.CloseScope();
                 builder.WriteLine();
 
+                if (info.SourceMetadata.PropertyBindings.Any(pb => pb.exposedType == WinCompData.MetaData.PropertySetValueType.Color))
+                {
+                    // There's at least one themed color. They will need a helper method to convert to Vector4.
+                    builder.WriteLine("static Vector4 ColorAsVector4(Color color) => new Vector4(color.R, color.G, color.B, color.A);");
+                    builder.WriteLine();
+                }
+
+                // EnsureThemeProperties(...) method implementation.
                 builder.WriteLine("CompositionPropertySet EnsureThemeProperties(Compositor compositor)");
                 builder.OpenScope();
                 builder.WriteLine($"if ({info.ThemePropertiesFieldName} is null)");

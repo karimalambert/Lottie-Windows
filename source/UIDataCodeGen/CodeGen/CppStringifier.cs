@@ -20,6 +20,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         public override string DefaultInitialize => "{}";
 
+        public override string VariableInitialization(string value) => $"{{ {value} }}";
+
         public override string Namespace(string value) => value.Replace(".", "::");
 
         public override string CanvasFigureLoop(Mgcg.CanvasFigureLoop value)
@@ -52,7 +54,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             }
         }
 
-        public override string Color(Color value) => $"ColorHelper::FromArgb({Hex(value.A)}, {Hex(value.R)}, {Hex(value.G)}, {Hex(value.B)})";
+        public override string Color(Color value) => $"{{ {Hex(value.A)}, {Hex(value.R)}, {Hex(value.G)}, {Hex(value.B)} }}";
 
         public override string Deref => "->";
 
