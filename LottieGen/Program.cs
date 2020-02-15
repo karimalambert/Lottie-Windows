@@ -237,6 +237,7 @@ OVERVIEW:
                        useful when the generated code is going to be hacked on.
          -OutputFolder Specifies the output folder for the generated files. If not
                        specified the files will be written to the current directory.
+         -Namespace    Specifies the namespace for the generated code.
          -Strict       Fails on any parsing or translation issue. If not specified, 
                        a best effort will be made to create valid output, and any 
                        issues will be reported to STDOUT.

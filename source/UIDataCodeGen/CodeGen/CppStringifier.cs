@@ -20,6 +20,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         public override string DefaultInitialize => "{}";
 
+        public override string Namespace(string value) => value.Replace(".", "::");
+
         public override string CanvasFigureLoop(Mgcg.CanvasFigureLoop value)
         {
             switch (value)

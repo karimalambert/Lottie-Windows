@@ -21,22 +21,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         readonly Stringifier _s;
 
         CSharpInstantiatorGenerator(
-            string className,
-            Vector2 size,
-            IReadOnlyList<(CompositionObject graphRoot, uint requiredUapVersion)> graphs,
-            IReadOnlyDictionary<Guid, object> sourceMetadata,
-            TimeSpan duration,
-            bool setCommentProperties,
-            bool disableFieldOptimization,
+            CodegenConfiguration configuration,
             Stringifier stringifier)
             : base(
-                  className: className,
-                  compositionDeclaredSize: size,
-                  graphs: graphs,
-                  sourceMetadata: sourceMetadata,
-                  duration: duration,
-                  setCommentProperties: setCommentProperties,
-                  disableFieldOptimization: disableFieldOptimization,
+                  configuration,
+                  setCommentProperties: false,
                   stringifier: stringifier)
         {
             _s = stringifier;
@@ -47,23 +36,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         /// Windows.UI.Composition Visual.
         /// </summary>
         /// <returns>A tuple containing the C# code and list of referenced asset files.</returns>
-        public static (string csText, IEnumerable<Uri> assetList) CreateFactoryCode(
-            string className,
-            IReadOnlyList<(CompositionObject graphRoot, uint requiredUapVersion)> graphs,
-            IReadOnlyDictionary<Guid, object> sourceMetadata,
-            float width,
-            float height,
-            TimeSpan duration,
-            bool disableFieldOptimization)
+        public static (string csText, IEnumerable<Uri> assetList) CreateFactoryCode(CodegenConfiguration configuration)
         {
             var generator = new CSharpInstantiatorGenerator(
-                                className: className,
-                                size: new Vector2(width, height),
-                                graphs: graphs,
-                                sourceMetadata: sourceMetadata,
-                                duration: duration,
-                                setCommentProperties: false,
-                                disableFieldOptimization: disableFieldOptimization,
+                                configuration: configuration,
                                 stringifier: new Stringifier());
 
             var csText = generator.GenerateCode();
@@ -122,7 +98,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             builder.WriteLine();
 
-            builder.WriteLine("namespace AnimatedVisuals");
+            builder.WriteLine($"namespace {info.Namespace}");
             builder.OpenScope();
 
             // Write a description of the source as comments.

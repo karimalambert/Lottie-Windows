@@ -12,22 +12,22 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 #if PUBLIC_UIDataCodeGen
     public
 #endif
-    sealed class CxInstantiatorGenerator : CppInstantiatorGeneratorBase
+    sealed class CppwinrtInstantiatorGenerator : CppInstantiatorGeneratorBase
     {
-        CxInstantiatorGenerator(
+        CppwinrtInstantiatorGenerator(
             CodegenConfiguration configuration,
             string headerFileName)
             : base(
                   configuration: configuration,
                   setCommentProperties: false,
-                  new CxStringifier(),
+                  new CppwinrtStringifier(),
                   headerFileName,
-                  false)
+                  true)
         {
         }
 
         /// <summary>
-        /// Returns the Cx code for a factory that will instantiate the given <see cref="Visual"/> as a
+        /// Returns the Cppwinrt code for a factory that will instantiate the given <see cref="Visual"/> as a
         /// Windows.UI.Composition Visual.
         /// </summary>
         /// <returns>A value tuple containing the cpp code, header code, and list of referenced asset files.</returns>
@@ -35,7 +35,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             CodegenConfiguration configuration,
             string headerFileName)
         {
-            var generator = new CxInstantiatorGenerator(
+            var generator = new CppwinrtInstantiatorGenerator(
                 configuration: configuration,
                 headerFileName: headerFileName);
 
