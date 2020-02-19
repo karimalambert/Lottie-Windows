@@ -8,8 +8,10 @@ using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData;
+using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.MetaData;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.Mgcg;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinUIXamlMediaData;
+using Newtonsoft.Json.Serialization;
 using Mgce = Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.Mgce;
 
 namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
@@ -102,9 +104,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 builder.WriteLine("namespace ABI");
                 builder.WriteLine("{");
                 builder.WriteLine("#include <Windows.Graphics.Effects.Interop.h>");
+                builder.WriteLine("#include <Windows.Graphics.Interop.h>");
                 builder.WriteLine("}");
                 builder.WriteLine("#else");
                 builder.WriteLine("#include <Windows.Graphics.Effects.Interop.h>");
+                builder.WriteLine("#include <Windows.Graphics.Interop.h>");
                 builder.WriteLine("#endif");
 
                 // ComPtr
@@ -186,6 +190,19 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.WriteLine("{");
             builder.Indent();
 
+            if (info.IsThemed)
+            {
+                if (info.SourceMetadata.PropertyBindings.Any(pb => pb.exposedType == PropertySetValueType.Color))
+                {
+                    // There's at least one themed color. It will need a helper method to convert to Vector4.
+                    builder.WriteLine("float4 ColorAsVector4(Color color)");
+                    builder.OpenScope();
+                    builder.WriteLine("return { static_cast<float>(color.R), static_cast<float>(color.G), static_cast<float>(color.B), static_cast<float>(color.A) };");
+                    builder.CloseScope();
+                    builder.WriteLine();
+                }
+            }
+
             if (info.UsesCanvasEffects ||
                 info.UsesCanvasGeometry)
             {
@@ -261,10 +278,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 info.AnimatedVisualSourceInfo.UsesCanvasGeometry)
             {
                 // Utility method for D2D geometries
-                builder.WriteLine($"static {_typeName.IGeometrySource2D} CanvasGeometryToIGeometrySource2D(CanvasGeometry geo)");
+                builder.WriteLine($"static {_s.ReferenceTypeName(_typeName.IGeometrySource2D)} CanvasGeometryToIGeometrySource2D(CanvasGeometry geo)");
                 builder.OpenScope();
                 builder.WriteLine($"ComPtr<ABI::Windows::Graphics::{_typeName.IGeometrySource2D}> interop = geo.Detach();");
-                builder.WriteLine($"return reinterpret_cast<{_typeName.IGeometrySource2D}>(interop.Get());");
+                builder.WriteLine($"return reinterpret_cast<{_s.ReferenceTypeName(_typeName.IGeometrySource2D)}>(interop.Get());");
                 builder.CloseScope();
                 builder.WriteLine();
 
@@ -341,21 +358,21 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             {
                 var propertyImplBuilder = new CodeBuilder();
                 propertyImplBuilder.WriteLine($"return {{ {_s.TimeSpan(info.AnimatedVisualSourceInfo.DurationTicksFieldName)} }};");
-                WriteReadOnlyPropertyImpl(builder, "TimeSpan", "Duration", propertyImplBuilder);
+                WritePropertyImpl(builder, isVirtual: true, "TimeSpan", "Duration", propertyImplBuilder);
             }
 
             builder.WriteLine();
             {
                 var propertyImplBuilder = new CodeBuilder();
                 propertyImplBuilder.WriteLine("return _root;");
-                WriteReadOnlyPropertyImpl(builder, _typeName.Visual, "RootVisual", propertyImplBuilder);
+                WritePropertyImpl(builder, isVirtual: true, _typeName.Visual, "RootVisual", propertyImplBuilder);
             }
 
             builder.WriteLine();
             {
                 var propertyImplBuilder = new CodeBuilder();
                 propertyImplBuilder.WriteLine($"return {Vector2(info.AnimatedVisualSourceInfo.CompositionDeclaredSize)};");
-                WriteReadOnlyPropertyImpl(builder, "float2", "Size", propertyImplBuilder);
+                WritePropertyImpl(builder, isVirtual: true, "float2", "Size", propertyImplBuilder);
             }
 
             // Write the IsRuntimeCompatible static method.
@@ -368,13 +385,18 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.CloseCppTypeScope();
         }
 
-        void WriteReadOnlyPropertyImpl(CodeBuilder builder, string returnType, string propertyName, CodeBuilder implementation)
+        void WritePropertyImpl(
+            CodeBuilder builder,
+            bool isVirtual,
+            string returnType,
+            string propertyName,
+            CodeBuilder getImplementation)
         {
             if (_isCppWinrtMode)
             {
                 builder.WriteLine($"{returnType} {propertyName}() const");
                 builder.OpenScope();
-                builder.WriteCodeBuilder(implementation);
+                builder.WriteCodeBuilder(getImplementation);
                 builder.CloseScope();
                 builder.WriteLine();
             }
@@ -382,9 +404,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             {
                 builder.WriteLine($"property {returnType} {propertyName}");
                 builder.OpenScope();
-                builder.WriteLine($"virtual {returnType} get()");
+                builder.WriteLine($"{(isVirtual ? "virtual " : string.Empty)}{returnType} get()");
                 builder.OpenScope();
-                builder.WriteCodeBuilder(implementation);
+                builder.WriteCodeBuilder(getImplementation);
                 builder.CloseScope();
                 builder.CloseScope();
                 builder.WriteLine();
@@ -405,22 +427,23 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             // Generate the methods that create and get the theme property set.
             if (info.IsThemed)
             {
-                if (info.SourceMetadata.PropertyBindings.Any(pb => pb.exposedType == WinCompData.MetaData.PropertySetValueType.Color))
-                {
-                    // There's at least one themed color. They will need a helper method to convert to Vector4.
-                    builder.WriteLine("float4 ColorAsVector4(Color color)");
-                    builder.OpenScope();
-                    builder.WriteLine("return { color.R, color.G, color.B, color.A };");
-                    builder.CloseScope();
-                    builder.WriteLine();
-                }
-
                 builder.WriteLine($"{_typeName.CompositionPropertySet} {_s.Namespace(info.Namespace)}::{info.ClassName}::EnsureThemeProperties({_typeName.Compositor} compositor)");
                 builder.OpenScope();
                 builder.WriteLine($"if ({info.ThemePropertiesFieldName} == nullptr)");
                 builder.OpenScope();
                 builder.WriteLine($"{info.ThemePropertiesFieldName} = compositor{_s.Deref}CreatePropertySet();");
-                WriteThemePropertySetInitialization(builder, info.ThemePropertiesFieldName);
+
+                // Initialize the values in the property set.
+                foreach (var prop in info.SourceMetadata.PropertyBindings)
+                {
+                    WriteThemePropertyInitialization(
+                        builder,
+                        info.ThemePropertiesFieldName,
+                        prop.bindingName,
+                        prop.exposedType,
+                        prop.actualType);
+                }
+
                 builder.CloseScope();
                 builder.WriteLine();
                 builder.WriteLine($"return {info.ThemePropertiesFieldName};");
@@ -432,6 +455,55 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 builder.WriteLine("return EnsureThemeProperties(compositor);");
                 builder.CloseScope();
                 builder.WriteLine();
+
+                // Write property implementations for each theme property.
+                foreach (var prop in info.SourceMetadata.PropertyBindings)
+                {
+                    // Write the getter. This just reads the values out of the backing field.
+                    if (_isCppWinrtMode)
+                    {
+                        builder.WriteLine($"{TypeName(prop.exposedType)} {info.Namespace}::{info.ClassName}::{prop.bindingName}()");
+                        builder.OpenScope();
+                        builder.WriteLine($"return _theme{prop.bindingName};");
+                        builder.CloseScope();
+                        builder.WriteLine();
+                    }
+                    else
+                    {
+                        builder.WriteLine($"{TypeName(prop.exposedType)} {info.Namespace}::{info.ClassName}::{prop.bindingName}::get()");
+                        builder.OpenScope();
+                        builder.WriteLine($"return _theme{prop.bindingName};");
+                        builder.CloseScope();
+                        builder.WriteLine();
+                    }
+
+                    // Write the setter. This saves to the backing field, and updates the theme property
+                    // set if one has been created.
+                    if (_isCppWinrtMode)
+                    {
+                        builder.WriteLine($"void {info.Namespace}::{info.ClassName}::{prop.bindingName}({TypeName(prop.exposedType)} value)");
+                        builder.OpenScope();
+                        builder.WriteLine($"_theme{prop.bindingName} = value;");
+                        builder.WriteLine("if (_themeProperties != nullptr)");
+                        builder.OpenScope();
+                        WriteThemePropertyInitialization(builder, "_themeProperties", prop.bindingName, prop.exposedType, prop.actualType);
+                        builder.CloseScope();
+                        builder.CloseScope();
+                        builder.WriteLine();
+                    }
+                    else
+                    {
+                        builder.WriteLine($"void {info.Namespace}::{info.ClassName}::{prop.bindingName}::set({TypeName(prop.exposedType)} value)");
+                        builder.OpenScope();
+                        builder.WriteLine($"_theme{prop.bindingName} = value;");
+                        builder.WriteLine("if (_themeProperties != nullptr)");
+                        builder.OpenScope();
+                        WriteThemePropertyInitialization(builder, "_themeProperties", prop.bindingName, prop.exposedType, prop.actualType);
+                        builder.CloseScope();
+                        builder.CloseScope();
+                        builder.WriteLine();
+                    }
+                }
             }
 
             // Generate the method that creates an instance of the composition on the IAnimatedVisualSource
@@ -832,7 +904,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             {
                 // Make the AnimatedVisualSource inherit from IThemedAnimatedVisualSource.
                 // TODO - disabling for now while we figure out how to turn this on and off.
-                inherits += ", IThemedAnimatedVisualSource";
+                //inherits += ", IThemedAnimatedVisualSource";
             }
 
             if (_isCppWinrtMode)
@@ -865,13 +937,15 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 // Add fields for each of the theme properties.
                 foreach (var prop in info.SourceMetadata.PropertyBindings)
                 {
-                    var (exposedTypeName, initialValue) = prop.exposedType switch
+                    var exposedTypeName = QualifiedTypeName(prop.exposedType);
+
+                    var initialValue = prop.exposedType switch
                     {
-                        WinCompData.MetaData.PropertySetValueType.Color => ("Windows::UI::Color", _s.Color((WinCompData.Wui.Color)prop.initialValue)),
-                        WinCompData.MetaData.PropertySetValueType.Scalar => ("float", _s.Float((float)prop.initialValue)),
-                        WinCompData.MetaData.PropertySetValueType.Vector2 => ("float2", _s.Vector2((Vector2)prop.initialValue)),
-                        WinCompData.MetaData.PropertySetValueType.Vector3 => ("float3", _s.Vector3((Vector3)prop.initialValue)),
-                        WinCompData.MetaData.PropertySetValueType.Vector4 => ("float4", _s.Vector4((Vector4)prop.initialValue)),
+                        PropertySetValueType.Color => _s.ColorArgs((WinCompData.Wui.Color)prop.initialValue),
+                        PropertySetValueType.Scalar => _s.Float((float)prop.initialValue),
+                        PropertySetValueType.Vector2 => _s.Vector2Args((Vector2)prop.initialValue),
+                        PropertySetValueType.Vector3 => _s.Vector3Args((Vector3)prop.initialValue),
+                        PropertySetValueType.Vector4 => _s.Vector4Args((Vector4)prop.initialValue),
                         _ => throw new InvalidOperationException(),
                     };
 
@@ -888,6 +962,25 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.Indent();
             if (info.IsThemed)
             {
+                // Write properties declarations for each themed property.
+                foreach (var prop in info.SourceMetadata.PropertyBindings)
+                {
+                    if (_isCppWinrtMode)
+                    {
+                        builder.WriteLine($"{QualifiedTypeName(prop.exposedType)} {prop.bindingName}();");
+                        builder.WriteLine($"void {prop.bindingName}({QualifiedTypeName(prop.exposedType)} value);");
+                    }
+                    else
+                    {
+                        builder.WriteLine($"property {QualifiedTypeName(prop.exposedType)} {prop.bindingName}");
+                        builder.OpenScope();
+                        builder.WriteLine($"{QualifiedTypeName(prop.exposedType)} get();");
+                        builder.WriteLine($"void set ({QualifiedTypeName(prop.exposedType)} value);");
+                        builder.CloseScope();
+                        builder.WriteLine();
+                    }
+                }
+
                 // TODO - if IThemedAnimatedVisualSource is enabled then this becomes virtual, otherwise not.
                 //builder.WriteLine($"virtual {wuc}::{_typeName.CompositionPropertySet} GetThemeProperties({wuc}::{_typeName.Compositor} compositor);");
                 builder.WriteLine($"{wuc}::{_typeName.CompositionPropertySet} GetThemeProperties({wuc}::{_typeName.Compositor} compositor);");
@@ -1222,6 +1315,24 @@ private:
     std::vector<Microsoft::WRL::ComPtr<IGraphicsEffectSource>> m_sources;
 };
 ";
+
+        static string QualifiedTypeName(PropertySetValueType propertySetValueType)
+            => propertySetValueType switch
+            {
+                PropertySetValueType.Color => "Windows::UI::Color",
+                _ => TypeName(propertySetValueType),
+            };
+
+        static string TypeName(PropertySetValueType propertySetValueType)
+            => propertySetValueType switch
+            {
+                PropertySetValueType.Color => "Color",
+                PropertySetValueType.Scalar => "float",
+                PropertySetValueType.Vector2 => "float2",
+                PropertySetValueType.Vector3 => "float3",
+                PropertySetValueType.Vector4 => "float4",
+                _ => throw new InvalidOperationException()
+            };
 
         readonly struct TypeNames
         {
