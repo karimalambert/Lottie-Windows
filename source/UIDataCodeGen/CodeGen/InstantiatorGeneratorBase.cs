@@ -301,24 +301,23 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         }
 
         /// <summary>
-        /// Writes code that initializes the properties in the theme CompositionPropertySet.
+        /// Writes code that initializes a theme property value in the theme property set.
         /// </summary>
-        /// <param name="builder">A <see cref="CodeBuilder"/> used to create the code.</param>
-        /// <param name="variableName">The variable holding the property set.</param>
-        protected void WriteThemePropertySetInitialization(CodeBuilder builder, string variableName)
+        protected void WriteThemePropertyInitialization(
+            CodeBuilder builder,
+            string propertySetVariableName,
+            string themeBindingName,
+            PropertySetValueType exposedType,
+            PropertySetValueType actualType)
         {
-            // WritePropertySetInitialization(builder, _themeProperties, variableName);
-            foreach (var prop in _sourceMetadata.PropertyBindings)
+            var themePropertyBackingField = $"_theme{themeBindingName}";
+            if (exposedType == PropertySetValueType.Color)
             {
-                var themePropertyBackingField = $"_theme{prop.bindingName}";
-                if (prop.exposedType == WinCompData.MetaData.PropertySetValueType.Color)
-                {
-                    // Colors are converted to Vector4s.
-                    themePropertyBackingField = $"ColorAsVector4({themePropertyBackingField})";
-                }
-
-                builder.WriteLine($"{variableName}{Deref}Insert{PropertySetValueType(prop.actualType)}({String(prop.bindingName)}, {themePropertyBackingField});");
+                // Colors are converted to Vector4s.
+                themePropertyBackingField = $"ColorAsVector4({themePropertyBackingField})";
             }
+
+            builder.WriteLine($"{propertySetVariableName}{Deref}Insert{PropertySetValueTypeName(actualType)}({String(themeBindingName)}, {themePropertyBackingField});");
         }
 
         void WritePropertySetInitialization(CodeBuilder builder, CompositionPropertySet propertySet, string variableName)
@@ -326,7 +325,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             foreach (var (name, type) in propertySet.Names)
             {
                 var valueInitializer = PropertySetValueInitializer(propertySet, name, type);
-                builder.WriteLine($"{variableName}{Deref}Insert{PropertySetValueType(type)}({String(name)}, {valueInitializer});");
+                builder.WriteLine($"{variableName}{Deref}Insert{PropertySetValueTypeName(type)}({String(name)}, {valueInitializer});");
             }
         }
 
@@ -373,11 +372,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 {
                     if (actualType != exposedType)
                     {
-                        yield return $"{PropertySetValueType(actualType)} {String(name)} as {PropertySetValueType(exposedType)}";
+                        yield return $"{PropertySetValueTypeName(actualType)} {String(name)} as {PropertySetValueTypeName(exposedType)}";
                     }
                     else
                     {
-                        yield return $"{PropertySetValueType(actualType)} {String(name)}";
+                        yield return $"{PropertySetValueTypeName(actualType)} {String(name)}";
                     }
                 }
             }
@@ -804,25 +803,25 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         static IEnumerable<ObjectData> OrderByName(IEnumerable<ObjectData> nodes) =>
             nodes.OrderBy(n => n.Name, AlphanumericStringComparer.Instance);
 
-        static string PropertySetValueType(PropertySetValueType value)
+        static string PropertySetValueTypeName(PropertySetValueType value)
             => value switch
             {
-                WinCompData.MetaData.PropertySetValueType.Color => "Color",
-                WinCompData.MetaData.PropertySetValueType.Scalar => "Scalar",
-                WinCompData.MetaData.PropertySetValueType.Vector2 => "Vector2",
-                WinCompData.MetaData.PropertySetValueType.Vector3 => "Vector3",
-                WinCompData.MetaData.PropertySetValueType.Vector4 => "Vector4",
+                PropertySetValueType.Color => "Color",
+                PropertySetValueType.Scalar => "Scalar",
+                PropertySetValueType.Vector2 => "Vector2",
+                PropertySetValueType.Vector3 => "Vector3",
+                PropertySetValueType.Vector4 => "Vector4",
                 _ => throw new InvalidOperationException(),
             };
 
-        string PropertySetValueInitializer(CompositionPropertySet propertySet, string propertyName, WinCompData.MetaData.PropertySetValueType propertyType)
+        string PropertySetValueInitializer(CompositionPropertySet propertySet, string propertyName, PropertySetValueType propertyType)
             => propertyType switch
             {
-                WinCompData.MetaData.PropertySetValueType.Color => PropertySetColorValueInitializer(propertySet, propertyName),
-                WinCompData.MetaData.PropertySetValueType.Scalar => PropertySetScalarValueInitializer(propertySet, propertyName),
-                WinCompData.MetaData.PropertySetValueType.Vector2 => PropertySetVector2ValueInitializer(propertySet, propertyName),
-                WinCompData.MetaData.PropertySetValueType.Vector3 => PropertySetVector3ValueInitializer(propertySet, propertyName),
-                WinCompData.MetaData.PropertySetValueType.Vector4 => PropertySetVector4ValueInitializer(propertySet, propertyName),
+                PropertySetValueType.Color => PropertySetColorValueInitializer(propertySet, propertyName),
+                PropertySetValueType.Scalar => PropertySetScalarValueInitializer(propertySet, propertyName),
+                PropertySetValueType.Vector2 => PropertySetVector2ValueInitializer(propertySet, propertyName),
+                PropertySetValueType.Vector3 => PropertySetVector3ValueInitializer(propertySet, propertyName),
+                PropertySetValueType.Vector4 => PropertySetVector4ValueInitializer(propertySet, propertyName),
                 _ => throw new InvalidOperationException(),
             };
 

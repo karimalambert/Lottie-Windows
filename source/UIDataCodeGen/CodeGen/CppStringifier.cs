@@ -54,7 +54,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             }
         }
 
-        public override string Color(Color value) => $"{{ {Hex(value.A)}, {Hex(value.R)}, {Hex(value.G)}, {Hex(value.B)} }}";
+        public override string Color(Color value) => $"{{ {ColorArgs(value)} }}";
+
+        public string ColorArgs(Color value) => $"{Hex(value.A)}, {Hex(value.R)}, {Hex(value.G)}, {Hex(value.B)}";
 
         public override string Deref => "->";
 
@@ -103,11 +105,17 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         public override string ConstVar => "const auto";
 
-        public override string Vector2(Vector2 value) => $"{{ {Float(value.X)}, {Float(value.Y)} }}";
+        public override string Vector2(Vector2 value) => $"{{ {Vector2Args(value)} }}";
 
-        public override string Vector3(Vector3 value) => $"{{ {Float(value.X)}, {Float(value.Y)}, {Float(value.Z)} }}";
+        public string Vector2Args(Vector2 value) => $"{Float(value.X)}, {Float(value.Y)}";
 
-        public override string Vector4(Vector4 value) => $"{{ {Float(value.X)}, {Float(value.Y)}, {Float(value.Z)}, {Float(value.W)} }}";
+        public override string Vector3(Vector3 value) => $"{{ {Vector3Args(value)} }}";
+
+        public string Vector3Args(Vector3 value) => $"{Float(value.X)}, {Float(value.Y)}, {Float(value.Z)}";
+
+        public override string Vector4(Vector4 value) => $"{{ {Vector4Args(value)} }}";
+
+        public string Vector4Args(Vector4 value) => $"{Float(value.X)}, {Float(value.Y)}, {Float(value.Z)}, {Float(value.W)}";
 
         public override string IListAdd => "Append";
 

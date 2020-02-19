@@ -6,6 +6,7 @@ using System;
 using System.Globalization;
 using System.Numerics;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData;
+using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.MetaData;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.Mgc;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.Mgcg;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.Wui;
@@ -52,6 +53,25 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         public virtual string PropertyGet(string target, string propertyName) => $"{target}{Deref}{propertyName}";
 
         public virtual string PropertySet(string target, string propertyName, string value) => $"{target}{Deref}{propertyName} = {value}";
+
+        public string PropertySetValueType(PropertySetValueType type, bool isNamespaceQualified)
+        {
+            switch (type)
+            {
+                case WinCompData.MetaData.PropertySetValueType.Color:
+                    return isNamespaceQualified ? Namespace("Windows.UI.Colors.Color") : "Color";
+                case WinCompData.MetaData.PropertySetValueType.Scalar:
+                    return TypeFloat32;
+                case WinCompData.MetaData.PropertySetValueType.Vector2:
+                    return TypeVector2;
+                case WinCompData.MetaData.PropertySetValueType.Vector3:
+                    return TypeVector3;
+                case WinCompData.MetaData.PropertySetValueType.Vector4:
+                    return TypeVector4;
+                default:
+                    throw new InvalidOperationException();
+            }
+        }
 
         public virtual string Readonly(string value) => $"readonly {value}";
 
@@ -238,6 +258,14 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         }
 
         public virtual string Hex(int value) => $"0x{value.ToString("X2")}";
+
+        public virtual string TypeFloat32 { get; } = "float";
+
+        public virtual string TypeVector2 { get; } = "Vector2";
+
+        public virtual string TypeVector3 { get; } = "Vector3";
+
+        public virtual string TypeVector4 { get; } = "Vector4";
 
         // Sets the first character to lower case.
         public string CamelCase(string value) => $"{char.ToLowerInvariant(value[0])}{value.Substring(1)}";
