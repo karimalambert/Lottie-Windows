@@ -53,6 +53,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
         internal static Color ThemedColorAsVector4MultipliedByOpacities(string bindingName, Scalar[] opacities)
             => ColorAsVector4MultipliedByOpacities(ThemedColor4Property(bindingName), opacities);
 
+        internal static Scalar ThemedScalar(string bindingName) => Scalar(ThemeProperty(bindingName));
+
         // The given color multiplied by the given opacity, where the opacity is pre-multiplied by 255.
         // The premultiplication can result in a simpler expression when color.A is 255 because
         // 255 / 255 * premultipliedOpacity * 255 will simplify to just premultipliedOpacity.
