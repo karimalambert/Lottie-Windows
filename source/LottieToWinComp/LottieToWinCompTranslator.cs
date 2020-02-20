@@ -2672,20 +2672,29 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             CompositionSpriteShape sprite)
         {
             var strokeThickness = context.TrimAnimatable(shapeStroke.StrokeWidth);
-            if (strokeThickness.IsAnimated)
+
+            if (!TryBindScalarPropertyToTheme(
+                target: sprite,
+                bindingSpec: shapeStroke.Name,
+                lottiePropertyName: nameof(shapeStroke.StrokeWidth),
+                compositionPropertyName: nameof(sprite.StrokeThickness),
+                defaultValue: strokeThickness.InitialValue))
             {
-                ApplyScalarKeyFrameAnimation(context, strokeThickness, sprite, nameof(sprite.StrokeThickness));
-            }
-            else
-            {
-                sprite.StrokeThickness = (float)strokeThickness.InitialValue;
+                if (strokeThickness.IsAnimated)
+                {
+                    ApplyScalarKeyFrameAnimation(context, strokeThickness, sprite, nameof(sprite.StrokeThickness));
+                }
+                else
+                {
+                    sprite.StrokeThickness = Float(strokeThickness.InitialValue);
+                }
             }
 
             sprite.StrokeStartCap = sprite.StrokeEndCap = sprite.StrokeDashCap = StrokeCap(shapeStroke.CapType);
 
             sprite.StrokeLineJoin = StrokeLineJoin(shapeStroke.JoinType);
 
-            sprite.StrokeMiterLimit = (float)shapeStroke.MiterLimit;
+            sprite.StrokeMiterLimit = Float(shapeStroke.MiterLimit);
 
             sprite.StrokeBrush = brush;
         }
@@ -2807,17 +2816,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             string bindingSpec)
         {
             // Read property bindings embedded into the name of the fill.
-            if (_translatePropertyBindings)
-            {
-                var bindingName = PropertyBindings.FindFirstBindingNameForProperty(bindingSpec, "Color");
-                if (bindingName is string)
-                {
-                    // The fill is bound to a property name.
-                    return TranslateBoundSolidColor(context, opacity, bindingName, DefaultValueOf(color));
-                }
-            }
+            var bindingName = GetThemeBindingNameForLottieProperty(bindingSpec, "Color");
 
-            return CreateAnimatedColorBrush(context, context.TrimAnimatable(color), opacity);
+            return bindingName is null
+                ? CreateAnimatedColorBrush(context, context.TrimAnimatable(color), opacity)
+                : TranslateBoundSolidColor(context, opacity, bindingName, DefaultValueOf(color));
         }
 
         // Translates a SolidColorFill that gets its color value from a property set value with the given name.
@@ -2827,35 +2830,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                 string bindingName,
                 Color defaultColor)
         {
-            // Create a theme property set if one hasn't been created yet.
-            var themeProperties = _themePropertySet ?? (_themePropertySet = _c.CreatePropertySet());
-
-            // Insert a property set value for the color if one hasn't yet been added.
-            // The color is inserted as a Vector4 to allow sub-channel animation because
-            // WinComp Color expressions do not permit sub-channel animation. We used
-            // sub-channel animation to manipulate the alpha channel.
-            switch (themeProperties.TryGetVector4(bindingName, out _))
-            {
-                case CompositionGetValueStatus.NotFound:
-                    // The property hasn't been added yet. Add it.
-                    var defaultColorColor = Color(defaultColor);
-                    themeProperties.InsertVector4(bindingName, Vector4(defaultColorColor));
-                    _propertyBindings.AddPropertyBinding(
-                        bindingName,
-                        actualType: PropertySetValueType.Vector4,
-                        exposedType: PropertySetValueType.Color,
-                        defaultValue: defaultColorColor);
-                    break;
-
-                case CompositionGetValueStatus.Succeeded:
-
-                    // The property has already been added.
-                    break;
-
-                case CompositionGetValueStatus.TypeMismatch:
-                default:
-                    throw new InvalidOperationException();
-            }
+            // Ensure there is a property added to the theme property set.
+            EnsureThemePropertyExists(bindingName, defaultColor);
 
             var result = _c.CreateColorBrush();
 
@@ -2886,7 +2862,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                 var opacityScalarExpressions = animatableOpacities.Select(a => Expr.Scalar($"my.{a.name}")).ToArray();
                 var anim = _c.CreateExpressionAnimation(ThemedColorAsVector4MultipliedByOpacities(bindingName, opacityScalarExpressions));
                 anim.SetReferenceParameter("my", result.Properties);
-                anim.SetReferenceParameter(ThemePropertiesName, themeProperties);
+                anim.SetReferenceParameter(ThemePropertiesName, _themePropertySet);
 
                 StartExpressionAnimation(result, nameof(result.Color), anim);
                 return result;
@@ -2895,7 +2871,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             {
                 // Opacity isn't animated. Multiply the alpha channel of the color by the non-animated opacity value.
                 var anim = _c.CreateExpressionAnimation(ThemedColorMultipliedByOpacity(bindingName, opacity.NonAnimatedValue));
-                anim.SetReferenceParameter(ThemePropertiesName, themeProperties);
+                anim.SetReferenceParameter(ThemePropertiesName, _themePropertySet);
                 StartExpressionAnimation(result, nameof(result.Color), anim);
                 return result;
             }
@@ -4346,6 +4322,101 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
             return result;
         }
+
+        bool TryBindScalarPropertyToTheme(
+            CompositionObject target,
+            string bindingSpec,
+            string lottiePropertyName,
+            string compositionPropertyName,
+            double defaultValue)
+        {
+#if true
+            var bindingName = GetThemeBindingNameForLottieProperty(bindingSpec, lottiePropertyName);
+
+            if (bindingName is null)
+            {
+                return false;
+            }
+            else
+            {
+                // Ensure there is a property in the theme property set for this binding name.
+                EnsureThemePropertyExists(bindingName, defaultValue);
+
+                // Create an expression that binds property to the theme property set.
+                var anim = _c.CreateExpressionAnimation(ThemedScalar(bindingName));
+                anim.SetReferenceParameter(ThemePropertiesName, _themePropertySet);
+                target.StartAnimation(compositionPropertyName, anim);
+                return true;
+            }
+#endif
+        }
+
+        // Ensures there is a property in the theme property set with the given name and default value.
+        void EnsureThemePropertyExists(string bindingName, Color defaultValue)
+        {
+            // Create a theme property set if one hasn't been created yet.
+            var themeProperties = _themePropertySet ?? (_themePropertySet = _c.CreatePropertySet());
+
+            // Insert a property set value for the scalar if one hasn't yet been added.
+            switch (themeProperties.TryGetVector4(bindingName, out _))
+            {
+                case CompositionGetValueStatus.NotFound:
+                    // The property hasn't been added yet. Add it.
+                    var defaultColor = Color(defaultValue);
+                    themeProperties.InsertVector4(bindingName, Vector4(defaultColor));
+                    _propertyBindings.AddPropertyBinding(
+                        bindingName,
+                        actualType: PropertySetValueType.Vector4,
+                        exposedType: PropertySetValueType.Color,
+                        defaultValue: defaultColor);
+                    break;
+
+                case CompositionGetValueStatus.Succeeded:
+                    // The property has already been added.
+                    break;
+
+                case CompositionGetValueStatus.TypeMismatch:
+                default:
+                    throw new InvalidOperationException();
+            }
+        }
+
+        // Ensures there is a property in the theme property set with the given name and default value.
+        void EnsureThemePropertyExists(string bindingName, double defaultValue)
+        {
+            // Create a theme property set if one hasn't been created yet.
+            var themeProperties = _themePropertySet ?? (_themePropertySet = _c.CreatePropertySet());
+
+            // Insert a property set value for the scalar if one hasn't yet been added.
+            switch (themeProperties.TryGetScalar(bindingName, out _))
+            {
+                case CompositionGetValueStatus.NotFound:
+                    // The property hasn't been added yet. Add it.
+                    themeProperties.InsertScalar(bindingName, Float(defaultValue));
+                    _propertyBindings.AddPropertyBinding(
+                        bindingName,
+                        actualType: PropertySetValueType.Scalar,
+                        exposedType: PropertySetValueType.Scalar,
+                        defaultValue: Float(defaultValue));
+                    break;
+
+                case CompositionGetValueStatus.Succeeded:
+                    // The property has already been added.
+                    break;
+
+                case CompositionGetValueStatus.TypeMismatch:
+                default:
+                    throw new InvalidOperationException();
+            }
+        }
+
+        // Parses the given bindingSpec, and returns the name of the property in the theme
+        // propertyset that should be used for binding to, or null if the property bindings
+        // are currently disabled, or the bindingSpec doesn't mention the given property name.
+        string GetThemeBindingNameForLottieProperty(string bindingSpec, string propertyName)
+            => _translatePropertyBindings
+                ? PropertyBindings.FindFirstBindingNameForProperty(bindingSpec, propertyName)
+                : null;
 
         // Implements IDisposable.Dispose(). Currently not needed but will be required
         // if this class needs to hold onto any IDisposable objects.

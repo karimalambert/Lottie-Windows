@@ -59,7 +59,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         readonly LoadedImageSurfaceInfo[] _loadedImageSurfaceInfos;
         readonly Dictionary<ObjectData, LoadedImageSurfaceInfo> _loadedImageSurfaceInfosByNode;
         readonly SourceMetadata _sourceMetadata;
-        readonly CompositionPropertySet _themeProperties;
+        readonly bool _isThemed;
         AnimatedVisualGenerator _currentAnimatedVisualGenerator;
 
         protected InstantiatorGeneratorBase(
@@ -80,25 +80,17 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             _animatedVisualGenerators = graphs.Select(g => new AnimatedVisualGenerator(this, g.graphRoot, g.requiredUapVersion, graphs.Count > 1)).ToArray();
 
-            // The theme properties should be equivalent for each animated visual, so just
-            // get them from the first animated visual.
-            _themeProperties = _animatedVisualGenerators.First().GetThemeProperties();
+            // Determined whether theming is enabled.
+            _isThemed = _animatedVisualGenerators.Any(avg => avg.IsThemed);
 
             // Deal with the nodes that are shared between multiple AnimatedVisual classes.
             // The nodes need naming, and some other adjustments.
-            var shareableNodes = _animatedVisualGenerators.SelectMany(a => a.GetShareableNodes()).ToArray();
+            var sharedNodes = _animatedVisualGenerators.SelectMany(a => a.GetSharedNodes()).ToArray();
 
-            // Ensure that we only have to deal with LoadedImageSurface nodes as they are the only
-            // nodes that we currently need to share. This can be removed if we need to share
-            // other types of nodes later. Asserting that we only have LoadedImageSurface nodes
-            // here makes the code following this simpler.
-            if (shareableNodes.Where(n => !n.IsLoadedImageSurface).Any())
-            {
-                throw new InvalidOperationException();
-            }
-
+            // Canonicalize the loaded images surfaces.
             var sharedNodeGroups =
-                (from n in shareableNodes
+                (from n in sharedNodes
+                 where n.IsLoadedImageSurface
                  let obj = (Wmd.LoadedImageSurface)n.Object
                  let key = obj.Type == Wmd.LoadedImageSurface.LoadedImageSurfaceType.FromUri
                              ? (object)((Wmd.LoadedImageSurfaceFromUri)obj).Uri
@@ -106,7 +98,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                  group n by key into g
                  select new SharedNodeGroup(g)).ToArray();
 
-            // Generate names for each of the canonical nodes (i.e. the first node in each group).
+            // Generate names for each of the canonical nodes of the shared nodes (i.e. the first node in each group).
             foreach ((var n, var name) in NodeNamer<ObjectData>.GenerateNodeNames(sharedNodeGroups.Select(g => g.CanonicalNode)))
             {
                 n.Name = name;
@@ -138,6 +130,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             }
 
             var sharedLoadedImageSurfaceInfos = (from g in sharedNodeGroups
+                                                 where g.CanonicalNode.IsLoadedImageSurface
                                                  let loadedImageSurfaceNode = LoadedImageSurfaceInfoFromObjectData(g.CanonicalNode)
                                                  from node in OrderByName(g.All)
                                                  select (node, loadedImageSurfaceNode)).ToArray();
@@ -599,7 +592,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         string IAnimatedVisualSourceInfo.ThemePropertiesFieldName => ThemePropertiesFieldName;
 
-        bool IAnimatedVisualSourceInfo.IsThemed => _themeProperties != null;
+        bool IAnimatedVisualSourceInfo.IsThemed => _isThemed;
 
         Vector2 IAnimatedVisualSourceInfo.CompositionDeclaredSize => _compositionDeclaredSize;
 
@@ -884,8 +877,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             readonly uint _requiredUapVersion;
             readonly bool _isPartOfMultiVersionSource;
 
-            // The subset of the object graph for which nodes will be generated.
+            // The subset of the object graph for which factories will be generated.
             readonly ObjectData[] _nodes;
+
+            IReadOnlyList<LoadedImageSurfaceInfo> _loadedImageSurfaceInfos;
 
             // Holds the node for which a factory is currently being written.
             ObjectData _currentObjectFactoryNode;
@@ -919,10 +914,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 // Force inlining on CubicBezierEasingFunction nodes that are only referenced once, because their factories
                 // are always very simple.
-                foreach (var node in _objectGraph.Nodes.Where(
-                                        n => n.Type == Graph.NodeType.CompositionObject &&
-                                        n.Object is CubicBezierEasingFunction &&
-                                        IsEqualToOne(FilteredInRefs(n))))
+                foreach (var (node, obj) in _objectGraph.CompositionObjectNodes.Where(
+                                        n => n.Object is CubicBezierEasingFunction &&
+                                            IsEqualToOne(FilteredInRefs(n.Node))))
                 {
                     node.ForceInline(() =>
                     {
@@ -930,11 +924,29 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     });
                 }
 
+                // If there is a theme property set, give it a special name and
+                // mark it as shared. The theme property set is the only unowned property set.
+                foreach (var (node, obj) in _objectGraph.CompositionObjectNodes.Where(
+                        n => n.Object is CompositionPropertySet cps && cps.Owner == null))
+                {
+                    node.Name = "ThemeProperties";
+                    node.IsSharedNode = true;
+
+                    // If there's a theme property set, this IAnimatedVisual is themed.
+                    IsThemed = true;
+                }
+
+                // Mark all the LoadedImageSurface nodes as shared and ensure they have storage.
+                foreach (var (node, _) in _objectGraph.LoadedImageSurfaceNodes)
+                {
+                    node.IsSharedNode = true;
+                }
+
                 // Get the nodes that will produce factory methods.
                 var factoryNodes = _objectGraph.Nodes.Where(n => n.NeedsAFactory).ToArray();
 
                 // Give names to each node, except the nodes that may be shared by multiple IAnimatedVisuals.
-                foreach ((var n, var name) in NodeNamer<ObjectData>.GenerateNodeNames(factoryNodes.Where(n => !n.IsShareableNode)))
+                foreach ((var n, var name) in NodeNamer<ObjectData>.GenerateNodeNames(factoryNodes.Where(n => !n.IsSharedNode)))
                 {
                     n.Name = name;
                 }
@@ -943,9 +955,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 // or are LoadedImageSurfaces.
                 foreach (var node in _objectGraph.Nodes)
                 {
-                    if (node.IsShareableNode)
+                    if (node.IsSharedNode)
                     {
-                        // Shareable nodes are cached and shared between IAnimatedVisual instances, so
+                        // Shared nodes are cached and shared between IAnimatedVisual instances, so
                         // they require storage.
                         node.RequiresStorage = true;
                         node.RequiresReadonlyStorage = true;
@@ -981,32 +993,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 _nodes = OrderByName(factoryNodes).ToArray();
             }
 
-            internal IAnimatedVisualInfo AnimatedVisualInfo => this;
+            // Returns the node for the theme CompositionPropertySet, or null if the
+            // IAnimatedVisual does not support theming.
+            internal bool IsThemed { get; }
 
-            // Returns the nodes that can be shared between multiple IAnimatedVisuals.
-            internal IEnumerable<ObjectData> GetShareableNodes() => _nodes.Where(n => n.IsShareableNode);
-
-            // Returns the node for the theme property set, if any.
-            internal CompositionPropertySet GetThemeProperties()
-            {
-                // The theme property set is the only un-owned CompositionPropertySet.
-                return
-                    (from n in _objectGraph.CompositionObjectNodes
-                     let obj = n.Object as CompositionPropertySet
-                     where obj != null && obj.Owner is null
-                     select obj).FirstOrDefault();
-            }
-
-            /// <summary>
-            /// Gets a list of the <see cref="LoadedImageSurfaceInfo"/> representing the LoadedImageSurface of the AnimatedVisual and its properties.
-            /// </summary>
-            internal IEnumerable<LoadedImageSurfaceInfo> GetLoadedImageSurfaceInfos()
-            {
-                return
-                    (from n in _nodes
-                     where n.IsLoadedImageSurface
-                     select _owner._loadedImageSurfaceInfosByNode[n]).OrderBy(n => n.Name, AlphanumericStringComparer.Instance);
-            }
+            // Returns the nodes that are shared between multiple IAnimatedVisuals.
+            // The fields for these are stored on the IAnimatedVisualSource.
+            internal IEnumerable<ObjectData> GetSharedNodes() => _objectGraph.Nodes.Where(n => n.IsSharedNode);
 
             // Returns the node for the given object.
             ObjectData NodeFor(CompositionObject obj) => _objectGraph[obj];
@@ -1390,7 +1383,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 _owner.WriteDefaultInitializedField(builder, Readonly(_stringifier.ReferenceTypeName("Compositor")), "_c");
                 _owner.WriteDefaultInitializedField(builder, Readonly(_stringifier.ReferenceTypeName("ExpressionAnimation")), SingletonExpressionAnimationName);
 
-                if (_owner._themeProperties != null)
+                if (_owner._isThemed)
                 {
                     _owner.WriteDefaultInitializedField(builder, Readonly(_stringifier.ReferenceTypeName("CompositionPropertySet")), ThemePropertiesFieldName);
                 }
@@ -1905,7 +1898,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                         // It's an unowned property set. Currently these are:
                         // * only used for themes.
                         // * placed in a field by the constructor of the IAnimatedVisual.
-                        Debug.Assert(_owner._themeProperties != null, "Precondition");
+                        Debug.Assert(_owner._isThemed, "Precondition");
                         return ThemePropertiesFieldName;
                     }
 
@@ -2608,7 +2601,23 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             string IAnimatedVisualInfo.ClassName => "AnimatedVisual" + (_isPartOfMultiVersionSource ? $"_UAPv{_requiredUapVersion}" : string.Empty);
 
-            IReadOnlyList<LoadedImageSurfaceInfo> IAnimatedVisualInfo.LoadedImageSurfaceNodes => GetLoadedImageSurfaceInfos().ToArray();
+            IReadOnlyList<LoadedImageSurfaceInfo> IAnimatedVisualInfo.LoadedImageSurfaceNodes
+            {
+                get
+                {
+                    if (_loadedImageSurfaceInfos == null)
+                    {
+                        _loadedImageSurfaceInfos =
+                            (from n in _nodes
+                             where n.IsLoadedImageSurface
+                             select _owner._loadedImageSurfaceInfosByNode[n])
+                                .OrderBy(n => n.Name, AlphanumericStringComparer.Instance)
+                                .ToArray();
+                    }
+
+                    return _loadedImageSurfaceInfos;
+                }
+            }
 
             uint IAnimatedVisualInfo.RequiredUapVersion => _requiredUapVersion;
         }
@@ -2742,7 +2751,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             // True if the node describes an object that can be shared between
             // multiple IAnimatedVisual classes, and thus will be associated with the
             // IAnimatedVisualSource implementation rather than the IAnimatedVisual implementation.
-            internal bool IsShareableNode => IsLoadedImageSurface;
+            internal bool IsSharedNode { get; set; }
 
             // Set to indicate that the node uses the Windows.UI.Xaml.Media namespace.
             internal bool UsesNamespaceWindowsUIXamlMedia => IsLoadedImageSurface;

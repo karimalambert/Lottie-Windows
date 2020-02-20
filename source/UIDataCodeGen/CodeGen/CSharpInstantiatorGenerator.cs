@@ -127,7 +127,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             => value switch
             {
                 WinCompData.MetaData.PropertySetValueType.Color => "Color",
-                WinCompData.MetaData.PropertySetValueType.Scalar => "Scalar",
+                WinCompData.MetaData.PropertySetValueType.Scalar => "float",
                 WinCompData.MetaData.PropertySetValueType.Vector2 => "Vector2",
                 WinCompData.MetaData.PropertySetValueType.Vector3 => "Vector3",
                 WinCompData.MetaData.PropertySetValueType.Vector4 => "Vector4",
@@ -162,10 +162,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         void WriteIAnimatedVisualSource(CodeBuilder builder, IAnimatedVisualSourceInfo info)
         {
             builder.WriteLine($"sealed class {info.ClassName} : IAnimatedVisualSource");
-            if (info.IsThemed)
-            {
-                builder.WriteLine(", IThemedAnimatedVisualSource");
-            }
 
             builder.OpenScope();
 
@@ -194,16 +190,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 // Add properties for each of the theme properties.
                 foreach (var prop in info.SourceMetadata.PropertyBindings)
                 {
-                    var (exposedTypeName, initialValue) = prop.exposedType switch
-                    {
-                        WinCompData.MetaData.PropertySetValueType.Color => ("Color", _s.Color((WinCompData.Wui.Color)prop.initialValue)),
-                        WinCompData.MetaData.PropertySetValueType.Scalar => ("float", _s.Float((float)prop.initialValue)),
-                        WinCompData.MetaData.PropertySetValueType.Vector2 => ("Vector2", _s.Vector2((Vector2)prop.initialValue)),
-                        WinCompData.MetaData.PropertySetValueType.Vector3 => ("Vector3", _s.Vector3((Vector3)prop.initialValue)),
-                        WinCompData.MetaData.PropertySetValueType.Vector4 => ("Vector4", _s.Vector4((Vector4)prop.initialValue)),
-                        _ => throw new InvalidOperationException(),
-                    };
-
                     WriteThemeProperty(builder, info, prop.exposedType, prop.bindingName, prop.actualType);
                 }
 
