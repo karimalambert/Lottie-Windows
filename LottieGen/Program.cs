@@ -235,6 +235,9 @@ OVERVIEW:
          -DisableCodeGenOptimizer
                        Disables optimization done by the code generator. This is 
                        useful when the generated code is going to be hacked on.
+         -GenerateDependencyObject
+                       Generates code that extends DependencyObject. This is useful
+                       to allow XAML binding to properties in the Lottie source.
          -MinimumUapVersion
                        The lowest UAP version on which the result must run. Defaults 
                        to 7. Must be 7 or higher. Code will be generated that will

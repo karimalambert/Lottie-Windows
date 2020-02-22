@@ -55,44 +55,49 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         protected override void WriteFileStart(CodeBuilder builder, IAnimatedVisualSourceInfo info)
         {
             // A sorted set to hold the namespaces that the generated code will use. The set is maintained in sorted order.
-            var namepaces = new SortedSet<string>();
+            var namespaces = new SortedSet<string>();
 
             if (info.UsesCanvas)
             {
-                namepaces.Add("Microsoft.Graphics.Canvas");
+                namespaces.Add("Microsoft.Graphics.Canvas");
             }
 
             if (info.UsesCanvasEffects)
             {
-                namepaces.Add("Microsoft.Graphics.Canvas.Effects");
+                namespaces.Add("Microsoft.Graphics.Canvas.Effects");
             }
 
             if (info.UsesCanvasGeometry)
             {
-                namepaces.Add("Microsoft.Graphics.Canvas.Geometry");
+                namespaces.Add("Microsoft.Graphics.Canvas.Geometry");
             }
 
             if (info.UsesNamespaceWindowsUIXamlMedia)
             {
-                namepaces.Add("Windows.UI.Xaml.Media");
-                namepaces.Add("System.Runtime.InteropServices.WindowsRuntime");
-                namepaces.Add("Windows.Foundation");
-                namepaces.Add("System.ComponentModel");
+                namespaces.Add("Windows.UI.Xaml.Media");
+                namespaces.Add("System.Runtime.InteropServices.WindowsRuntime");
+                namespaces.Add("Windows.Foundation");
+                namespaces.Add("System.ComponentModel");
+            }
+
+            if (info.GenerateDependencyObject)
+            {
+                namespaces.Add("Windows.UI.Xaml");
             }
 
             if (info.UsesStreams)
             {
-                namepaces.Add("System.IO");
+                namespaces.Add("System.IO");
             }
 
-            namepaces.Add("Microsoft.UI.Xaml.Controls");
-            namepaces.Add("System");
-            namepaces.Add("System.Numerics");
-            namepaces.Add("Windows.UI");
-            namepaces.Add("Windows.UI.Composition");
+            namespaces.Add("Microsoft.UI.Xaml.Controls");
+            namespaces.Add("System");
+            namespaces.Add("System.Numerics");
+            namespaces.Add("Windows.UI");
+            namespaces.Add("Windows.UI.Composition");
 
             // Write out each namespace using.
-            foreach (var n in namepaces)
+            foreach (var n in namespaces)
             {
                 builder.WriteLine($"using {n};");
             }
@@ -123,37 +128,100 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.WriteLine();
         }
 
-        static string PropertySetValueType(PropertySetValueType value)
-            => value switch
+        static string ExposedType(PropertyBinding binding)
+            => binding.ExposedType switch
             {
-                WinCompData.MetaData.PropertySetValueType.Color => "Color",
-                WinCompData.MetaData.PropertySetValueType.Scalar => "float",
-                WinCompData.MetaData.PropertySetValueType.Vector2 => "Vector2",
-                WinCompData.MetaData.PropertySetValueType.Vector3 => "Vector3",
-                WinCompData.MetaData.PropertySetValueType.Vector4 => "Vector4",
+                PropertySetValueType.Color => "Color",
+                PropertySetValueType.Scalar => "double",
+                PropertySetValueType.Vector2 => "Vector2",
+                PropertySetValueType.Vector3 => "Vector3",
+                PropertySetValueType.Vector4 => "Vector4",
                 _ => throw new InvalidOperationException(),
             };
 
-        void WriteThemeProperty(
+        static string ActualType(PropertyBinding binding)
+            => binding.ExposedType switch
+            {
+                PropertySetValueType.Color => "Vector4",
+                PropertySetValueType.Scalar => "float",
+                PropertySetValueType.Vector2 => "Vector2",
+                PropertySetValueType.Vector3 => "Vector3",
+                PropertySetValueType.Vector4 => "Vector4",
+                _ => throw new InvalidOperationException(),
+            };
+
+        void WriteThemeProperties(
             CodeBuilder builder,
-            IAnimatedVisualSourceInfo info,
-            PropertySetValueType exposedType,
-            string themeBindingName,
-            PropertySetValueType actualType)
+            IAnimatedVisualSourceInfo info)
         {
-            builder.WriteLine($"public {PropertySetValueType(exposedType)} {themeBindingName}");
-            builder.OpenScope();
-            builder.WriteLine($"get => _theme{themeBindingName};");
-            builder.WriteLine("set");
-            builder.OpenScope();
-            builder.WriteLine($"_theme{themeBindingName} = value;");
-            builder.WriteLine($"if ({info.ThemePropertiesFieldName} != null)");
-            builder.OpenScope();
-            WriteThemePropertyInitialization(builder, info.ThemePropertiesFieldName, themeBindingName, exposedType, actualType);
-            builder.CloseScope();
-            builder.CloseScope();
-            builder.CloseScope();
-            builder.WriteLine();
+            foreach (var prop in info.SourceMetadata.PropertyBindings)
+            {
+                if (info.GenerateDependencyObject)
+                {
+                    builder.WriteLine($"public {ExposedType(prop)} {prop.Name}");
+                    builder.OpenScope();
+                    builder.WriteLine($"get => ({ExposedType(prop)})GetValue({prop.Name}Property);");
+                    builder.WriteLine($"set => SetValue({prop.Name}Property, value);");
+                }
+                else
+                {
+                    builder.WriteLine($"public {ExposedType(prop)} {prop.Name}");
+                    builder.OpenScope();
+                    builder.WriteLine($"get => _theme{prop.Name};");
+                    builder.WriteLine("set");
+                    builder.OpenScope();
+                    builder.WriteLine($"_theme{prop.Name} = value;");
+                    builder.WriteLine($"if ({info.ThemePropertiesFieldName} != null)");
+                    builder.OpenScope();
+                    WriteThemePropertyInitialization(builder, info.ThemePropertiesFieldName, prop);
+                    builder.CloseScope();
+                    builder.CloseScope();
+                }
+
+                builder.CloseScope();
+                builder.WriteLine();
+            }
+        }
+
+        // Writes the static dependency property fields and their initializers.
+        void WriteDependencyPropertyFields(
+            CodeBuilder builder,
+            IAnimatedVisualSourceInfo info)
+        {
+            if (info.GenerateDependencyObject)
+            {
+                foreach (var prop in info.SourceMetadata.PropertyBindings)
+                {
+                    builder.WriteComment($"Dependency property for {prop.Name}.");
+                    builder.WriteLine($"public static readonly DependencyProperty {prop.Name}Property =");
+                    builder.Indent();
+                    builder.WriteLine($"DependencyProperty.Register({String(prop.Name)}, typeof({ExposedType(prop)}), typeof({info.ClassName}),");
+                    builder.Indent();
+                    builder.WriteLine($"new PropertyMetadata({GetDefaultPropertyBindingValue(prop)}, On{prop.Name}Changed));");
+                    builder.UnIndent();
+                    builder.UnIndent();
+                    builder.WriteLine();
+                }
+            }
+        }
+
+        // Writes the methods that handle dependency property changes.
+        void WriteDependencyPropertyChangeHandlers(
+            CodeBuilder builder,
+            IAnimatedVisualSourceInfo info)
+        {
+            // Add the dependency property change handler methods.
+            if (info.GenerateDependencyObject)
+            {
+                foreach (var prop in info.SourceMetadata.PropertyBindings)
+                {
+                    builder.WriteLine($"static void On{prop.Name}Changed(DependencyObject d, DependencyPropertyChangedEventArgs args)");
+                    builder.OpenScope();
+                    WriteThemePropertyInitialization(builder, $"(({info.ClassName})d)._themeProperties?", prop, $"({ExposedType(prop)})args.NewValue");
+                    builder.CloseScope();
+                    builder.WriteLine();
+                }
+            }
         }
 
         /// <summary>
@@ -161,74 +229,19 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         /// </summary>
         void WriteIAnimatedVisualSource(CodeBuilder builder, IAnimatedVisualSourceInfo info)
         {
-            builder.WriteLine($"sealed class {info.ClassName} : IAnimatedVisualSource");
+            if (info.GenerateDependencyObject)
+            {
+                builder.WriteLine($"sealed class {info.ClassName} : DependencyObject, IAnimatedVisualSource");
+            }
+            else
+            {
+                builder.WriteLine($"sealed class {info.ClassName} : IAnimatedVisualSource");
+            }
 
             builder.OpenScope();
 
-            if (info.IsThemed)
-            {
-                builder.WriteLine($"CompositionPropertySet {info.ThemePropertiesFieldName};");
-
-                // Add fields for each of the theme properties.
-                foreach (var prop in info.SourceMetadata.PropertyBindings)
-                {
-                    var (exposedTypeName, initialValue) = prop.exposedType switch
-                    {
-                        WinCompData.MetaData.PropertySetValueType.Color => ("Color", _s.Color((WinCompData.Wui.Color)prop.initialValue)),
-                        WinCompData.MetaData.PropertySetValueType.Scalar => ("float", _s.Float((float)prop.initialValue)),
-                        WinCompData.MetaData.PropertySetValueType.Vector2 => ("Vector2", _s.Vector2((Vector2)prop.initialValue)),
-                        WinCompData.MetaData.PropertySetValueType.Vector3 => ("Vector3", _s.Vector3((Vector3)prop.initialValue)),
-                        WinCompData.MetaData.PropertySetValueType.Vector4 => ("Vector4", _s.Vector4((Vector4)prop.initialValue)),
-                        _ => throw new InvalidOperationException(),
-                    };
-
-                    WriteInitializedField(builder, exposedTypeName, $"_theme{prop.bindingName}", _s.VariableInitialization(initialValue));
-                }
-
-                builder.WriteLine();
-
-                // Add properties for each of the theme properties.
-                foreach (var prop in info.SourceMetadata.PropertyBindings)
-                {
-                    WriteThemeProperty(builder, info, prop.exposedType, prop.bindingName, prop.actualType);
-                }
-
-                builder.WriteLine("public CompositionPropertySet GetThemeProperties(Compositor compositor)");
-                builder.OpenScope();
-                builder.WriteLine("return EnsureThemeProperties(compositor);");
-                builder.CloseScope();
-                builder.WriteLine();
-
-                if (info.SourceMetadata.PropertyBindings.Any(pb => pb.exposedType == WinCompData.MetaData.PropertySetValueType.Color))
-                {
-                    // There's at least one themed color. They will need a helper method to convert to Vector4.
-                    builder.WriteLine("static Vector4 ColorAsVector4(Color color) => new Vector4(color.R, color.G, color.B, color.A);");
-                    builder.WriteLine();
-                }
-
-                // EnsureThemeProperties(...) method implementation.
-                builder.WriteLine("CompositionPropertySet EnsureThemeProperties(Compositor compositor)");
-                builder.OpenScope();
-                builder.WriteLine($"if ({info.ThemePropertiesFieldName} is null)");
-                builder.OpenScope();
-                builder.WriteLine($"{info.ThemePropertiesFieldName} = compositor.CreatePropertySet();");
-
-                // Initialize the values in the property set.
-                foreach (var prop in info.SourceMetadata.PropertyBindings)
-                {
-                    WriteThemePropertyInitialization(
-                        builder,
-                        info.ThemePropertiesFieldName,
-                        prop.bindingName,
-                        prop.exposedType,
-                        prop.actualType);
-                }
-
-                builder.CloseScope();
-                builder.WriteLine("return _themeProperties;");
-                builder.CloseScope();
-                builder.WriteLine();
-            }
+            // Add the methods and fields needed for theming.
+            WriteThemeMethodsAndFields(builder, info);
 
             // Generate the method that creates an instance of the animated visual.
             builder.WriteLine("public IAnimatedVisual TryCreateAnimatedVisual(Compositor compositor, out object diagnostics)");
@@ -256,12 +269,95 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.WriteLine("return null;");
         }
 
+        void WriteThemeMethodsAndFields(CodeBuilder builder, IAnimatedVisualSourceInfo info)
+        {
+            if (info.IsThemed)
+            {
+                builder.WriteLine($"CompositionPropertySet {info.ThemePropertiesFieldName};");
+
+                // Add fields for each of the theme properties.
+                // Not needed if generating a DependencyObject - the values wil be stored in DependencyProperty's.
+                if (!info.GenerateDependencyObject)
+                {
+                    foreach (var prop in info.SourceMetadata.PropertyBindings)
+                    {
+                        var defaultValue = GetDefaultPropertyBindingValue(prop);
+
+                        WriteInitializedField(builder, ExposedType(prop), $"_theme{prop.Name}", _s.VariableInitialization(defaultValue));
+                    }
+                }
+
+                builder.WriteLine();
+
+                // Add the public static dependency property fields for each theme property.
+                WriteDependencyPropertyFields(builder, info);
+
+                // Add properties for each of the theme properties.
+                WriteThemeProperties(builder, info);
+
+                builder.WriteLine("public CompositionPropertySet GetThemeProperties(Compositor compositor)");
+                builder.OpenScope();
+                builder.WriteLine("return EnsureThemeProperties(compositor);");
+                builder.CloseScope();
+                builder.WriteLine();
+
+                if (info.SourceMetadata.PropertyBindings.Any(pb => pb.ExposedType == PropertySetValueType.Color))
+                {
+                    // There's at least one themed color. They will need a helper method to convert to Vector4.
+                    builder.WriteLine("static Vector4 ColorAsVector4(Color color) => new Vector4(color.R, color.G, color.B, color.A);");
+                    builder.WriteLine();
+                }
+
+                // Add the dependency property change handler methods.
+                WriteDependencyPropertyChangeHandlers(builder, info);
+
+                // EnsureThemeProperties(...) method implementation.
+                builder.WriteLine("CompositionPropertySet EnsureThemeProperties(Compositor compositor)");
+                builder.OpenScope();
+                builder.WriteLine($"if ({info.ThemePropertiesFieldName} is null)");
+                builder.OpenScope();
+                builder.WriteLine($"{info.ThemePropertiesFieldName} = compositor.CreatePropertySet();");
+
+                // Initialize the values in the property set.
+                foreach (var prop in info.SourceMetadata.PropertyBindings)
+                {
+                    WriteThemePropertyInitialization(builder, info.ThemePropertiesFieldName, prop, prop.Name);
+                }
+
+                builder.CloseScope();
+                builder.WriteLine("return _themeProperties;");
+                builder.CloseScope();
+                builder.WriteLine();
+            }
+        }
+
+        string GetDefaultPropertyBindingValue(PropertyBinding prop)
+             => prop.ExposedType switch
+             {
+                 PropertySetValueType.Color => _s.Color((WinCompData.Wui.Color)prop.DefaultValue),
+
+                 // Scalars are stored as floats, but exposed as doubles as XAML markup prefers doubles.
+                 PropertySetValueType.Scalar => _s.Double((float)prop.DefaultValue),
+                 PropertySetValueType.Vector2 => _s.Vector2((Vector2)prop.DefaultValue),
+                 PropertySetValueType.Vector3 => _s.Vector3((Vector3)prop.DefaultValue),
+                 PropertySetValueType.Vector4 => _s.Vector4((Vector4)prop.DefaultValue),
+                 _ => throw new InvalidOperationException(),
+             };
+
         /// <summary>
         /// Write a class that implements the IDynamicAnimatedVisualSource interface.
         /// </summary>
         void WriteIDynamicAnimatedVisualSource(CodeBuilder builder, IAnimatedVisualSourceInfo info)
         {
-            builder.WriteLine($"sealed class {info.ClassName} : IDynamicAnimatedVisualSource, INotifyPropertyChanged");
+            if (info.GenerateDependencyObject)
+            {
+                builder.WriteLine($"sealed class {info.ClassName} : DependencyObject, IDynamicAnimatedVisualSource, INotifyPropertyChanged");
+            }
+            else
+            {
+                builder.WriteLine($"sealed class {info.ClassName} : IDynamicAnimatedVisualSource, INotifyPropertyChanged");
+            }
+
             builder.OpenScope();
 
             // Declare variables.
@@ -279,6 +375,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             }
 
             builder.WriteLine();
+
+            // Add the methods and fields needed for theming.
+            WriteThemeMethodsAndFields(builder, info);
 
             // Implement the INotifyPropertyChanged.PropertyChanged event.
             builder.WriteSummaryComment("This implementation of the INotifyPropertyChanged.PropertyChanged event is specific to C# and does not work on WinRT.");
@@ -321,7 +420,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             // Check whether the runtime will support the lowest UAP version required.
             var animatedVisualInfos = info.AnimatedVisualInfos.OrderByDescending(avi => avi.RequiredUapVersion).ToArray();
-            builder.WriteLine($"if (!{animatedVisualInfos[animatedVisualInfos.Length - 1].ClassName}.IsRuntimeCompatible())");
+            builder.WriteLine($"if (!{animatedVisualInfos[^1].ClassName}.IsRuntimeCompatible())");
             builder.OpenScope();
             builder.WriteLine("return null;");
             builder.CloseScope();

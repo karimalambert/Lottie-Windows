@@ -49,6 +49,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         public bool DisableOptimization { get; set; }
 
         /// <summary>
+        /// When <c>true</c>, the generated IAnimatedVisualSource implementation will
+        /// be a subclass of DependencyObject, and any theme properties will be
+        /// implemented as DependencyProperty's.
+        /// </summary>
+        public bool GenerateDependencyObject { get; set; }
+
+        /// <summary>
         /// The object graphs for which source will be generated.
         /// </summary>
         public IReadOnlyList<(CompositionObject graphRoot, uint requiredUapVersion)> ObjectGraphs { get; set; }

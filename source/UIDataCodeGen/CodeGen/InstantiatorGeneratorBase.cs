@@ -54,6 +54,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         readonly TimeSpan _compositionDuration;
         readonly bool _setCommentProperties;
         readonly bool _disableFieldOptimization;
+        readonly bool _generateDependencyObject;
         readonly Stringifier _stringifier;
         readonly IReadOnlyList<AnimatedVisualGenerator> _animatedVisualGenerators;
         readonly LoadedImageSurfaceInfo[] _loadedImageSurfaceInfos;
@@ -74,6 +75,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             _compositionDuration = configuration.Duration;
             _setCommentProperties = setCommentProperties;
             _disableFieldOptimization = configuration.DisableOptimization;
+            _generateDependencyObject = configuration.GenerateDependencyObject;
             _stringifier = stringifier;
 
             var graphs = configuration.ObjectGraphs;
@@ -299,19 +301,42 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         protected void WriteThemePropertyInitialization(
             CodeBuilder builder,
             string propertySetVariableName,
-            string themeBindingName,
-            PropertySetValueType exposedType,
-            PropertySetValueType actualType)
-        {
-            var themePropertyBackingField = $"_theme{themeBindingName}";
-            if (exposedType == PropertySetValueType.Color)
-            {
-                // Colors are converted to Vector4s.
-                themePropertyBackingField = $"ColorAsVector4({themePropertyBackingField})";
-            }
+            PropertyBinding prop)
+            => WriteThemePropertyInitialization(
+                builder,
+                propertySetVariableName,
+                prop,
+                $"_theme{prop.Name}");
 
-            builder.WriteLine($"{propertySetVariableName}{Deref}Insert{PropertySetValueTypeName(actualType)}({String(themeBindingName)}, {themePropertyBackingField});");
+        /// <summary>
+        /// Writes code that initializes a theme property value in the theme property set.
+        /// </summary>
+        protected void WriteThemePropertyInitialization(
+            CodeBuilder builder,
+            string propertySetVariableName,
+            PropertyBinding prop,
+            string themePropertyAccessor)
+        {
+            var propertyValueAccessor = GetThemePropertyAccessor(themePropertyAccessor, prop);
+            builder.WriteLine($"{propertySetVariableName}{Deref}Insert{PropertySetValueTypeName(prop.ActualType)}({String(prop.Name)}, {propertyValueAccessor});");
         }
+
+        /// <summary>
+        /// Gets code to access a theme property.
+        /// </summary>
+        /// <returns>
+        /// An expression that gets a theme property value.
+        /// </returns>
+        protected string GetThemePropertyAccessor(string accessor, PropertyBinding prop)
+            => prop.ExposedType switch
+            {
+                PropertySetValueType.Color => $"ColorAsVector4({accessor})",
+
+                // Scalars are stored as float, but exposed as double because
+                // XAML markup prefers floats.
+                PropertySetValueType.Scalar => $"(float){accessor}",
+                _ => accessor,
+            };
 
         void WritePropertySetInitialization(CodeBuilder builder, CompositionPropertySet propertySet, string variableName)
         {
@@ -356,20 +381,24 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 }
             }
 
+            // If there are property bindings, output information about them.
+            // But only do this if we're NOT generating a DependencyObject because
+            // the property bindings available on a DependencyObject are obvious
+            // from the code and repeating them here would just be noise.
             var names = _sourceMetadata.PropertyBindings;
-            if (names.Any())
+            if (names.Any() && !_generateDependencyObject)
             {
                 yield return "===========";
                 yield return "Property bindings:";
-                foreach (var (name, actualType, exposedType, _) in names)
+                foreach (var entry in names)
                 {
-                    if (actualType != exposedType)
+                    if (entry.ActualType != entry.ExposedType)
                     {
-                        yield return $"{PropertySetValueTypeName(actualType)} {String(name)} as {PropertySetValueTypeName(exposedType)}";
+                        yield return $"{PropertySetValueTypeName(entry.ExposedType),-8} {String(entry.Name),-15} as {PropertySetValueTypeName(entry.ActualType)}";
                     }
                     else
                     {
-                        yield return $"{PropertySetValueTypeName(actualType)} {String(name)}";
+                        yield return $"{PropertySetValueTypeName(entry.ActualType),-8} {String(entry.Name),-15}";
                     }
                 }
             }
@@ -589,6 +618,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         string IAnimatedVisualSourceInfo.ReusableExpressionAnimationFieldName => SingletonExpressionAnimationName;
 
         string IAnimatedVisualSourceInfo.DurationTicksFieldName => DurationTicksFieldName;
+
+        bool IAnimatedVisualSourceInfo.GenerateDependencyObject => _generateDependencyObject;
 
         string IAnimatedVisualSourceInfo.ThemePropertiesFieldName => ThemePropertiesFieldName;
 

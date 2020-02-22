@@ -32,6 +32,8 @@ sealed class CommandLineOptions
     // The error should be a sentence (starts with a capital letter, and ends with a period).
     internal string ErrorDescription { get; private set; }
 
+    internal bool GenerateDependencyObject { get; private set; }
+
     internal string InputFile { get; private set; }
 
     internal IEnumerable<Lang> Languages { get; private set; }
@@ -54,17 +56,18 @@ sealed class CommandLineOptions
 
     enum Keyword
     {
-        None,
+        None = 0,
         Ambiguous,
+        DisableCodeGenOptimizer,
+        DisableTranslationOptimizer,
         Help,
         InputFile,
+        GenerateDependencyObject,
         Language,
+        MinimumUapVersion,
         Namespace,
         OutputFolder,
         Strict,
-        DisableTranslationOptimizer,
-        DisableCodeGenOptimizer,
-        MinimumUapVersion,
         TargetUapVersion,
     }
 
@@ -115,14 +118,15 @@ sealed class CommandLineOptions
         // Define the keywords accepted on the command line.
         var tokenizer = new CommandlineTokenizer<Keyword>(Keyword.Ambiguous)
             .AddPrefixedKeyword("?", Keyword.Help)
+            .AddPrefixedKeyword("disablecodegenoptimizer", Keyword.DisableCodeGenOptimizer)
+            .AddPrefixedKeyword("disabletranslationoptimizer", Keyword.DisableTranslationOptimizer)
+            .AddPrefixedKeyword("generatedependencyobject", Keyword.GenerateDependencyObject)
             .AddPrefixedKeyword("help", Keyword.Help)
             .AddPrefixedKeyword("inputfile", Keyword.InputFile)
             .AddPrefixedKeyword("language", Keyword.Language)
             .AddPrefixedKeyword("namespace", Keyword.Namespace)
             .AddPrefixedKeyword("outputfolder", Keyword.OutputFolder)
             .AddPrefixedKeyword("strict", Keyword.Strict)
-            .AddPrefixedKeyword("disablecodegenoptimizer", Keyword.DisableCodeGenOptimizer)
-            .AddPrefixedKeyword("disabletranslationoptimizer", Keyword.DisableTranslationOptimizer)
             .AddPrefixedKeyword("minimumuapversion", Keyword.MinimumUapVersion)
             .AddPrefixedKeyword("targetuapversion", Keyword.TargetUapVersion);
 
@@ -146,6 +150,9 @@ sealed class CommandLineOptions
                         case Keyword.None:
                             ErrorDescription = $"Unexpected: \"{arg}\".";
                             return;
+                        case Keyword.GenerateDependencyObject:
+                            GenerateDependencyObject = true;
+                            break;
                         case Keyword.Help:
                             HelpRequested = true;
                             return;
