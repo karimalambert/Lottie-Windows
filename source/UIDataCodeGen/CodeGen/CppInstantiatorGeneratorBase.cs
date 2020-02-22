@@ -4,14 +4,11 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
-using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.MetaData;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.Mgcg;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinUIXamlMediaData;
-using Newtonsoft.Json.Serialization;
 using Mgce = Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.Mgce;
 
 namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
@@ -192,7 +189,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             if (info.IsThemed)
             {
-                if (info.SourceMetadata.PropertyBindings.Any(pb => pb.exposedType == PropertySetValueType.Color))
+                if (info.SourceMetadata.PropertyBindings.Any(pb => pb.ExposedType == PropertySetValueType.Color))
                 {
                     // There's at least one themed color. It will need a helper method to convert to Vector4.
                     builder.WriteLine("float4 ColorAsVector4(Color color)");
@@ -436,12 +433,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 // Initialize the values in the property set.
                 foreach (var prop in info.SourceMetadata.PropertyBindings)
                 {
-                    WriteThemePropertyInitialization(
-                        builder,
-                        info.ThemePropertiesFieldName,
-                        prop.bindingName,
-                        prop.exposedType,
-                        prop.actualType);
+                    WriteThemePropertyInitialization(builder, info.ThemePropertiesFieldName, prop);
                 }
 
                 builder.CloseScope();
@@ -462,17 +454,17 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     // Write the getter. This just reads the values out of the backing field.
                     if (_isCppWinrtMode)
                     {
-                        builder.WriteLine($"{TypeName(prop.exposedType)} {info.Namespace}::{info.ClassName}::{prop.bindingName}()");
+                        builder.WriteLine($"{TypeName(prop.ExposedType)} {info.Namespace}::{info.ClassName}::{prop.Name}()");
                         builder.OpenScope();
-                        builder.WriteLine($"return _theme{prop.bindingName};");
+                        builder.WriteLine($"return _theme{prop.Name};");
                         builder.CloseScope();
                         builder.WriteLine();
                     }
                     else
                     {
-                        builder.WriteLine($"{TypeName(prop.exposedType)} {info.Namespace}::{info.ClassName}::{prop.bindingName}::get()");
+                        builder.WriteLine($"{TypeName(prop.ExposedType)} {info.Namespace}::{info.ClassName}::{prop.Name}::get()");
                         builder.OpenScope();
-                        builder.WriteLine($"return _theme{prop.bindingName};");
+                        builder.WriteLine($"return _theme{prop.Name};");
                         builder.CloseScope();
                         builder.WriteLine();
                     }
@@ -481,24 +473,24 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     // set if one has been created.
                     if (_isCppWinrtMode)
                     {
-                        builder.WriteLine($"void {info.Namespace}::{info.ClassName}::{prop.bindingName}({TypeName(prop.exposedType)} value)");
+                        builder.WriteLine($"void {info.Namespace}::{info.ClassName}::{prop.Name}({TypeName(prop.ExposedType)} value)");
                         builder.OpenScope();
-                        builder.WriteLine($"_theme{prop.bindingName} = value;");
+                        builder.WriteLine($"_theme{prop.Name} = value;");
                         builder.WriteLine("if (_themeProperties != nullptr)");
                         builder.OpenScope();
-                        WriteThemePropertyInitialization(builder, "_themeProperties", prop.bindingName, prop.exposedType, prop.actualType);
+                        WriteThemePropertyInitialization(builder, "_themeProperties", prop);
                         builder.CloseScope();
                         builder.CloseScope();
                         builder.WriteLine();
                     }
                     else
                     {
-                        builder.WriteLine($"void {info.Namespace}::{info.ClassName}::{prop.bindingName}::set({TypeName(prop.exposedType)} value)");
+                        builder.WriteLine($"void {info.Namespace}::{info.ClassName}::{prop.Name}::set({TypeName(prop.ExposedType)} value)");
                         builder.OpenScope();
-                        builder.WriteLine($"_theme{prop.bindingName} = value;");
+                        builder.WriteLine($"_theme{prop.Name} = value;");
                         builder.WriteLine("if (_themeProperties != nullptr)");
                         builder.OpenScope();
-                        WriteThemePropertyInitialization(builder, "_themeProperties", prop.bindingName, prop.exposedType, prop.actualType);
+                        WriteThemePropertyInitialization(builder, "_themeProperties", prop);
                         builder.CloseScope();
                         builder.CloseScope();
                         builder.WriteLine();
@@ -937,19 +929,19 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 // Add fields for each of the theme properties.
                 foreach (var prop in info.SourceMetadata.PropertyBindings)
                 {
-                    var exposedTypeName = QualifiedTypeName(prop.exposedType);
+                    var exposedTypeName = QualifiedTypeName(prop.ExposedType);
 
-                    var initialValue = prop.exposedType switch
+                    var initialValue = prop.ExposedType switch
                     {
-                        PropertySetValueType.Color => _s.ColorArgs((WinCompData.Wui.Color)prop.initialValue),
-                        PropertySetValueType.Scalar => _s.Float((float)prop.initialValue),
-                        PropertySetValueType.Vector2 => _s.Vector2Args((Vector2)prop.initialValue),
-                        PropertySetValueType.Vector3 => _s.Vector3Args((Vector3)prop.initialValue),
-                        PropertySetValueType.Vector4 => _s.Vector4Args((Vector4)prop.initialValue),
+                        PropertySetValueType.Color => _s.ColorArgs((WinCompData.Wui.Color)prop.DefaultValue),
+                        PropertySetValueType.Scalar => _s.Float((float)prop.DefaultValue),
+                        PropertySetValueType.Vector2 => _s.Vector2Args((Vector2)prop.DefaultValue),
+                        PropertySetValueType.Vector3 => _s.Vector3Args((Vector3)prop.DefaultValue),
+                        PropertySetValueType.Vector4 => _s.Vector4Args((Vector4)prop.DefaultValue),
                         _ => throw new InvalidOperationException(),
                     };
 
-                    WriteInitializedField(builder, exposedTypeName, $"_theme{prop.bindingName}", _s.VariableInitialization(initialValue));
+                    WriteInitializedField(builder, exposedTypeName, $"_theme{prop.Name}", _s.VariableInitialization(initialValue));
                 }
 
                 builder.WriteLine();
@@ -967,15 +959,15 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 {
                     if (_isCppWinrtMode)
                     {
-                        builder.WriteLine($"{QualifiedTypeName(prop.exposedType)} {prop.bindingName}();");
-                        builder.WriteLine($"void {prop.bindingName}({QualifiedTypeName(prop.exposedType)} value);");
+                        builder.WriteLine($"{QualifiedTypeName(prop.ExposedType)} {prop.Name}();");
+                        builder.WriteLine($"void {prop.Name}({QualifiedTypeName(prop.ExposedType)} value);");
                     }
                     else
                     {
-                        builder.WriteLine($"property {QualifiedTypeName(prop.exposedType)} {prop.bindingName}");
+                        builder.WriteLine($"property {QualifiedTypeName(prop.ExposedType)} {prop.Name}");
                         builder.OpenScope();
-                        builder.WriteLine($"{QualifiedTypeName(prop.exposedType)} get();");
-                        builder.WriteLine($"void set ({QualifiedTypeName(prop.exposedType)} value);");
+                        builder.WriteLine($"{QualifiedTypeName(prop.ExposedType)} get();");
+                        builder.WriteLine($"void set ({QualifiedTypeName(prop.ExposedType)} value);");
                         builder.CloseScope();
                         builder.WriteLine();
                     }

@@ -36,6 +36,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         string DurationTicksFieldName { get; }
 
         /// <summary>
+        /// True if the IAnimatedVisualSource should be a DependencyObject.
+        /// </summary>
+        bool GenerateDependencyObject { get; }
+
+        /// <summary>
         /// Gets the name of the field holding the theme properties CompositionPropertySet.
         /// </summary>
         string ThemePropertiesFieldName { get; }

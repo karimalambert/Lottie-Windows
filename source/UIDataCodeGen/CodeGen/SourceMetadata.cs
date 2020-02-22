@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.MetaData;
 using LCM = Microsoft.Toolkit.Uwp.UI.Lottie.LottieMetadata.LottieCompositionMetadata;
 
@@ -21,7 +22,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         static readonly Guid s_lottieMetadataKey = new Guid("EA3D6538-361A-4B1C-960D-50A6C35563A5");
 
         readonly IReadOnlyDictionary<Guid, object> _sourceMetadata;
-        IReadOnlyList<(string bindingName, PropertySetValueType actualType, PropertySetValueType exposedType, object initialValue)> _propertyBindings;
+        IReadOnlyList<PropertyBinding> _propertyBindings;
         Lottie _lottieMetadata;
 
         internal SourceMetadata(IReadOnlyDictionary<Guid, object> sourceMetadata)
@@ -31,10 +32,22 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         internal Lottie LottieMetadata => _lottieMetadata ?? (_lottieMetadata = new Lottie(this));
 
-        internal IReadOnlyList<(string bindingName, PropertySetValueType actualType, PropertySetValueType exposedType, object initialValue)> PropertyBindings
-            => _propertyBindings ?? (_propertyBindings = _sourceMetadata.TryGetValue(s_propertyBindingNamesKey, out var propertyBindingNames)
-                ? (IReadOnlyList<(string bindingName, PropertySetValueType actualType, PropertySetValueType exposedType, object initialValue)>)propertyBindingNames
-                : Array.Empty<(string bindingName, PropertySetValueType actualType, PropertySetValueType exposedType, object initialValue)>());
+        internal IReadOnlyList<PropertyBinding> PropertyBindings
+        {
+            get
+            {
+                if (_propertyBindings is null)
+                {
+                    _sourceMetadata.TryGetValue(s_propertyBindingNamesKey, out var propertyBindingNames);
+                    var list = (IReadOnlyList<(string bindingName, PropertySetValueType actualType, PropertySetValueType exposedType, object initialValue)>)propertyBindingNames;
+                    _propertyBindings = list.Select(item => new PropertyBinding(item.bindingName, item.actualType, item.exposedType, item.initialValue))
+                                                .OrderBy(pb => pb.Name)
+                                                .ToArray();
+                }
+
+                return _propertyBindings;
+            }
+        }
 
         internal sealed class Lottie
         {

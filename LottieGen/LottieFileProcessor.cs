@@ -413,18 +413,8 @@ sealed class LottieFileProcessor
             return false;
         }
 
-        (string csText, IEnumerable<Uri> assetList) = CSharpInstantiatorGenerator.CreateFactoryCode(
-                new CodegenConfiguration
-                {
-                    ClassName = _className,
-                    Namespace = NormalizeNamespace(_options.Namespace),
-                    Width = _lottieComposition.Width,
-                    Height = _lottieComposition.Height,
-                    Duration = _lottieComposition.Duration,
-                    DisableOptimization = _options.DisableCodeGenOptimizer,
-                    SourceMetadata = _translationResults[0].SourceMetadata,
-                    ObjectGraphs = _translationResults.Select(tr => ((CompositionObject)tr.RootVisual, tr.MinimumRequiredUapVersion)).ToArray(),
-                });
+        (string csText, IEnumerable<Uri> assetList) =
+            CSharpInstantiatorGenerator.CreateFactoryCode(CreateCodeGenConfiguration());
 
         if (string.IsNullOrWhiteSpace(csText))
         {
@@ -457,19 +447,10 @@ sealed class LottieFileProcessor
             return false;
         }
 
-        (string cppText, string hText, IEnumerable<Uri> assetList) = CppwinrtInstantiatorGenerator.CreateFactoryCode(
-                new CodegenConfiguration
-                {
-                    ClassName = _className,
-                    Namespace = NormalizeNamespace(_options.Namespace),
-                    Width = _lottieComposition.Width,
-                    Height = _lottieComposition.Height,
-                    Duration = _lottieComposition.Duration,
-                    DisableOptimization = _options.DisableCodeGenOptimizer,
-                    SourceMetadata = _translationResults[0].SourceMetadata,
-                    ObjectGraphs = _translationResults.Select(tr => ((CompositionObject)tr.RootVisual, tr.MinimumRequiredUapVersion)).ToArray(),
-                },
-                System.IO.Path.GetFileName(outputHeaderFilePath));
+        (string cppText, string hText, IEnumerable<Uri> assetList) =
+                    CppwinrtInstantiatorGenerator.CreateFactoryCode(
+                        CreateCodeGenConfiguration(),
+                        System.IO.Path.GetFileName(outputHeaderFilePath));
 
         if (string.IsNullOrWhiteSpace(cppText))
         {
@@ -514,19 +495,10 @@ sealed class LottieFileProcessor
             return false;
         }
 
-        (string cppText, string hText, IEnumerable<Uri> assetList) = CxInstantiatorGenerator.CreateFactoryCode(
-                new CodegenConfiguration
-                {
-                    ClassName = _className,
-                    Namespace = NormalizeNamespace(_options.Namespace),
-                    Width = _lottieComposition.Width,
-                    Height = _lottieComposition.Height,
-                    Duration = _lottieComposition.Duration,
-                    DisableOptimization = _options.DisableCodeGenOptimizer,
-                    SourceMetadata = _translationResults[0].SourceMetadata,
-                    ObjectGraphs = _translationResults.Select(tr => ((CompositionObject)tr.RootVisual, tr.MinimumRequiredUapVersion)).ToArray(),
-                },
-                System.IO.Path.GetFileName(outputHeaderFilePath));
+        (string cppText, string hText, IEnumerable<Uri> assetList) =
+                    CxInstantiatorGenerator.CreateFactoryCode(
+                        CreateCodeGenConfiguration(),
+                        System.IO.Path.GetFileName(outputHeaderFilePath));
 
         if (string.IsNullOrWhiteSpace(cppText))
         {
@@ -628,6 +600,22 @@ sealed class LottieFileProcessor
             _reporter.WriteError(e.Message);
             return null;
         }
+    }
+
+    CodegenConfiguration CreateCodeGenConfiguration()
+    {
+        return new CodegenConfiguration
+        {
+            ClassName = _className,
+            Namespace = NormalizeNamespace(_options.Namespace),
+            Width = _lottieComposition.Width,
+            Height = _lottieComposition.Height,
+            Duration = _lottieComposition.Duration,
+            DisableOptimization = _options.DisableCodeGenOptimizer,
+            GenerateDependencyObject = _options.GenerateDependencyObject,
+            SourceMetadata = _translationResults[0].SourceMetadata,
+            ObjectGraphs = _translationResults.Select(tr => ((CompositionObject)tr.RootVisual, tr.MinimumRequiredUapVersion)).ToArray(),
+        };
     }
 
     // Outputs an error or warning message describing the error with the file path, error code, and description.

@@ -84,14 +84,14 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         public virtual string FactoryCall(string value) => value;
 
         public virtual string Float(float value) =>
-            Math.Floor(value) == value
+            (Math.Floor(value) == value
                 ? value.ToString("0", CultureInfo.InvariantCulture)
-                : value.ToString("G9", CultureInfo.InvariantCulture) + "F";
+                : value.ToString("G9", CultureInfo.InvariantCulture)) + "F";
 
         public virtual string Double(double value) =>
             Math.Floor(value) == value
-                ? value.ToString("0", CultureInfo.InvariantCulture)
-                : value.ToString("G15", CultureInfo.InvariantCulture);
+                    ? value.ToString("0", CultureInfo.InvariantCulture) + "d"
+                    : value.ToString("G15", CultureInfo.InvariantCulture);
 
         public virtual string Int32(int value) => value.ToString();
 
