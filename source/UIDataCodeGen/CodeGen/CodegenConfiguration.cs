@@ -64,5 +64,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         /// Information about the source.
         /// </summary>
         public IReadOnlyDictionary<Guid, object> SourceMetadata { get; set; }
+
+        /// <summary>
+        /// Information about the tool that initiated the code generation.
+        /// This information will be included in comments in the generated source.
+        /// </summary>
+        public IReadOnlyList<string> ToolInfo { get; set; }
     }
 }

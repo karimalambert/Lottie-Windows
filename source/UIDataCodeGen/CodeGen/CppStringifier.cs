@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
+using System.Globalization;
 using System.Numerics;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.Wui;
 using Mgcg = Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.Mgcg;
@@ -72,6 +73,16 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     throw new InvalidOperationException();
             }
         }
+
+        public override string Float(float value) =>
+            (Math.Floor(value) == value
+                ? value.ToString("0.0", CultureInfo.InvariantCulture)
+                : value.ToString("G9", CultureInfo.InvariantCulture)) + "F";
+
+        public override string Double(double value) =>
+            Math.Floor(value) == value
+                    ? value.ToString("0.0", CultureInfo.InvariantCulture) + "d"
+                    : value.ToString("G15", CultureInfo.InvariantCulture);
 
         public override string Int64(long value) => $"{value}L";
 

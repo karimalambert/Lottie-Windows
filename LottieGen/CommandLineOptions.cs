@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 
 internal enum Lang
 {
@@ -53,6 +54,50 @@ sealed class CommandLineOptions
     internal uint? MinimumUapVersion { get; private set; }
 
     internal uint? TargetUapVersion { get; private set; }
+
+    // Returns a command line equivalent to the current set of options, but
+    // without the InputFolder, OutputPath or Language options.
+    internal string ToConfigurationCommandLine()
+    {
+        var sb = new StringBuilder();
+        sb.Append(ThisAssembly.AssemblyName);
+        if (DisableTranslationOptimizer)
+        {
+            sb.Append($" -{nameof(DisableTranslationOptimizer)}");
+        }
+
+        if (DisableCodeGenOptimizer)
+        {
+            sb.Append($" -{nameof(DisableCodeGenOptimizer)}");
+        }
+
+        if (GenerateDependencyObject)
+        {
+            sb.Append($" -{nameof(GenerateDependencyObject)}");
+        }
+
+        if (MinimumUapVersion.HasValue)
+        {
+            sb.Append($" -{nameof(MinimumUapVersion)} {MinimumUapVersion.Value}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(Namespace))
+        {
+            sb.Append($" -{nameof(Namespace)} {Namespace}");
+        }
+
+        if (StrictMode)
+        {
+            sb.Append($" -{nameof(StrictMode)}");
+        }
+
+        if (TargetUapVersion.HasValue)
+        {
+            sb.Append($" -{nameof(TargetUapVersion)} {TargetUapVersion.Value}");
+        }
+
+        return sb.ToString();
+    }
 
     enum Keyword
     {

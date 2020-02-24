@@ -247,7 +247,7 @@ OVERVIEW:
          -Namespace    Specifies the namespace for the generated code.
          -OutputFolder Specifies the output folder for the generated files. If not
                        specified the files will be written to the current directory.
-         -Strict       Fails on any parsing or translation issue. If not specified, 
+         -StrictMode   Fails on any parsing or translation issue. If not specified, 
                        a best effort will be made to create valid output, and any 
                        issues will be reported to STDOUT.
          -TargetUapVersion
