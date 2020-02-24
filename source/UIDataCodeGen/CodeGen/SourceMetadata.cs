@@ -36,9 +36,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         {
             get
             {
-                if (_propertyBindings is null)
+                if (_propertyBindings is null && _sourceMetadata.TryGetValue(s_propertyBindingNamesKey, out var propertyBindingNames))
                 {
-                    _sourceMetadata.TryGetValue(s_propertyBindingNamesKey, out var propertyBindingNames);
                     var list = (IReadOnlyList<(string bindingName, PropertySetValueType actualType, PropertySetValueType exposedType, object initialValue)>)propertyBindingNames;
                     _propertyBindings = list.Select(item => new PropertyBinding(item.bindingName, item.actualType, item.exposedType, item.initialValue))
                                                 .OrderBy(pb => pb.Name)

@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData;
+using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.MetaData;
 
 namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 {
@@ -46,6 +47,107 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             var assetList = generator.GetAssetsList();
 
             return (cppText, hText, assetList);
+        }
+
+        protected override void WritePrivateThemeHeader(CodeBuilder builder, IAnimatedVisualSourceInfo info)
+        {
+            // Add a field to hold the theme property set.
+            builder.WriteLine($"winrt::{Wuc}::{T.CompositionPropertySet} {info.ThemePropertiesFieldName}{{ nullptr }};");
+
+            // Add fields for each of the theme properties.
+            foreach (var prop in info.SourceMetadata.PropertyBindings)
+            {
+                if (info.GenerateDependencyObject)
+                {
+                    builder.WriteLine($"static Windows::UI::Xaml::DependencyProperty^ _{prop.Name}Property;");
+                    builder.WriteLine($"static void On{prop.Name}Changed(Windows::UI::Xaml::DependencyObject^ d, Windows::UI::Xaml::DependencyPropertyChangedEventArgs^ e);");
+                }
+                else
+                {
+                    var exposedTypeName = QualifiedTypeName(prop.ExposedType);
+
+                    var initialValue = prop.ExposedType switch
+                    {
+                        PropertySetValueType.Color => S.ColorArgs((WinCompData.Wui.Color)prop.DefaultValue),
+                        PropertySetValueType.Scalar => S.Float((float)prop.DefaultValue),
+                        PropertySetValueType.Vector2 => S.Vector2Args((Vector2)prop.DefaultValue),
+                        PropertySetValueType.Vector3 => S.Vector3Args((Vector3)prop.DefaultValue),
+                        PropertySetValueType.Vector4 => S.Vector4Args((Vector4)prop.DefaultValue),
+                        _ => throw new InvalidOperationException(),
+                    };
+
+                    WriteInitializedField(builder, exposedTypeName, $"_theme{prop.Name}", S.VariableInitialization(initialValue));
+                }
+            }
+
+            builder.WriteLine();
+            builder.WriteLine($"winrt::{Wuc}::{T.CompositionPropertySet} EnsureThemeProperties(winrt::{Wuc}::{T.Compositor} compositor);");
+            builder.WriteLine();
+        }
+
+        protected override void WritePublicThemeHeader(CodeBuilder builder, IAnimatedVisualSourceInfo info)
+        {
+            // Write properties declarations for each themed property.
+            foreach (var prop in info.SourceMetadata.PropertyBindings)
+            {
+                builder.WriteLine($"{QualifiedTypeName(prop.ExposedType)} {prop.Name}();");
+                builder.WriteLine($"void {prop.Name}({QualifiedTypeName(prop.ExposedType)} value);");
+            }
+
+            // TODO - if IThemedAnimatedVisualSource is enabled then this becomes virtual, otherwise not.
+            //builder.WriteLine($"virtual {wuc}::{_typeName.CompositionPropertySet} GetThemeProperties({wuc}::{_typeName.Compositor} compositor);");
+            builder.WriteLine($"winrt::{Wuc}::{T.CompositionPropertySet} GetThemeProperties(winrt::{Wuc}::{T.Compositor} compositor);");
+            builder.WriteLine();
+        }
+
+        protected override void WriteThemePropertyImpls(CodeBuilder builder, IAnimatedVisualSourceInfo info)
+        {
+            builder.WriteLine($"{T.CompositionPropertySet} {S.Namespace(info.Namespace)}::{info.ClassName}::EnsureThemeProperties({T.Compositor} compositor)");
+            builder.OpenScope();
+            builder.WriteLine($"if ({info.ThemePropertiesFieldName} == nullptr)");
+            builder.OpenScope();
+            builder.WriteLine($"{info.ThemePropertiesFieldName} = compositor{S.Deref}CreatePropertySet();");
+
+            // Initialize the values in the property set.
+            foreach (var prop in info.SourceMetadata.PropertyBindings)
+            {
+                WriteThemePropertyInitialization(builder, info.ThemePropertiesFieldName, prop);
+            }
+
+            builder.CloseScope();
+            builder.WriteLine();
+            builder.WriteLine($"return {info.ThemePropertiesFieldName};");
+            builder.CloseScope();
+            builder.WriteLine();
+
+            builder.WriteLine($"{T.CompositionPropertySet} {S.Namespace(info.Namespace)}::{info.ClassName}::GetThemeProperties({T.Compositor} compositor)");
+            builder.OpenScope();
+            builder.WriteLine("return EnsureThemeProperties(compositor);");
+            builder.CloseScope();
+            builder.WriteLine();
+
+            // Write property implementations for each theme property.
+            foreach (var prop in info.SourceMetadata.PropertyBindings)
+            {
+                // Write the getter. This just reads the values out of the backing field.
+                builder.WriteLine($"{TypeName(prop.ExposedType)} {info.Namespace}::{info.ClassName}::{prop.Name}()");
+                builder.OpenScope();
+                builder.WriteLine($"return _theme{prop.Name};");
+                builder.CloseScope();
+                builder.WriteLine();
+
+                // Write the setter. This saves to the backing field, and updates the theme property
+                // set if one has been created.
+                builder.WriteLine($"void {info.Namespace}::{info.ClassName}::{prop.Name}({TypeName(prop.ExposedType)} value)");
+                builder.OpenScope();
+                builder.WriteLine($"_theme{prop.Name} = value;");
+                builder.WriteLine("if (_themeProperties != nullptr)");
+                builder.OpenScope();
+                WriteThemePropertyInitialization(builder, "_themeProperties", prop);
+                builder.CloseScope();
+                builder.CloseScope();
+                builder.WriteLine();
+            }
         }
     }
 }

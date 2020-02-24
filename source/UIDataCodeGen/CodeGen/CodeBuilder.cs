@@ -143,36 +143,45 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         /// <inheritdoc/>
         public override string ToString()
-        {
-            return ToString(0);
-        }
+            => ToString(0);
 
         internal string ToString(int indentCount)
         {
             var sb = new StringBuilder();
+
+            foreach (var line in ToLines(indentCount))
+            {
+                sb.AppendLine(line);
+            }
+
+            return sb.ToString();
+        }
+
+        internal IEnumerable<string> ToLines(int indentCount)
+        {
             foreach (var line in _lines)
             {
                 var builder = line.Text as CodeBuilder;
                 if (builder != null)
                 {
-                    sb.Append(builder.ToString(line.IndentCount + indentCount));
+                    foreach (var subLine in builder.ToLines(line.IndentCount + indentCount))
+                    {
+                        yield return subLine;
+                    }
                 }
                 else
                 {
                     var lineText = line.Text.ToString();
                     if (string.IsNullOrWhiteSpace(lineText))
                     {
-                        sb.AppendLine();
+                        yield return string.Empty;
                     }
                     else
                     {
-                        sb.Append(new string(' ', (line.IndentCount + indentCount) * IndentSize));
-                        sb.AppendLine(lineText);
+                        yield return new string(' ', (line.IndentCount + indentCount) * IndentSize) + lineText;
                     }
                 }
             }
-
-            return sb.ToString();
         }
 
         // Breaks up the given text into lines.

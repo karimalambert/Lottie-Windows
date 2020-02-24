@@ -414,7 +414,7 @@ sealed class LottieFileProcessor
         }
 
         (string csText, IEnumerable<Uri> assetList) =
-            CSharpInstantiatorGenerator.CreateFactoryCode(CreateCodeGenConfiguration());
+            CSharpInstantiatorGenerator.CreateFactoryCode(CreateCodeGenConfiguration("CSharp"));
 
         if (string.IsNullOrWhiteSpace(csText))
         {
@@ -449,7 +449,7 @@ sealed class LottieFileProcessor
 
         (string cppText, string hText, IEnumerable<Uri> assetList) =
                     CppwinrtInstantiatorGenerator.CreateFactoryCode(
-                        CreateCodeGenConfiguration(),
+                        CreateCodeGenConfiguration("CppWinrt"),
                         System.IO.Path.GetFileName(outputHeaderFilePath));
 
         if (string.IsNullOrWhiteSpace(cppText))
@@ -497,7 +497,7 @@ sealed class LottieFileProcessor
 
         (string cppText, string hText, IEnumerable<Uri> assetList) =
                     CxInstantiatorGenerator.CreateFactoryCode(
-                        CreateCodeGenConfiguration(),
+                        CreateCodeGenConfiguration("CX"),
                         System.IO.Path.GetFileName(outputHeaderFilePath));
 
         if (string.IsNullOrWhiteSpace(cppText))
@@ -602,8 +602,11 @@ sealed class LottieFileProcessor
         }
     }
 
-    CodegenConfiguration CreateCodeGenConfiguration()
+    CodegenConfiguration CreateCodeGenConfiguration(string languageSwitch)
     {
+        var syntheticCommandLine =
+            $"{_options.ToConfigurationCommandLine()} -Language {languageSwitch} -InputFile {System.IO.Path.GetFileName(_file)}";
+
         return new CodegenConfiguration
         {
             ClassName = _className,
@@ -615,6 +618,7 @@ sealed class LottieFileProcessor
             GenerateDependencyObject = _options.GenerateDependencyObject,
             SourceMetadata = _translationResults[0].SourceMetadata,
             ObjectGraphs = _translationResults.Select(tr => ((CompositionObject)tr.RootVisual, tr.MinimumRequiredUapVersion)).ToArray(),
+            ToolInfo = new[] { $"Command: {syntheticCommandLine}",  $"Version: {ThisAssembly.AssemblyInformationalVersion}" },
         };
     }
 
