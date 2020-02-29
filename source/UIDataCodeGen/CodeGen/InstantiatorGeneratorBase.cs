@@ -50,6 +50,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         readonly SourceMetadata _sourceMetadata;
         readonly bool _isThemed;
         readonly IReadOnlyList<string> _toolInfo;
+        readonly string _interfaceType;
+
         AnimatedVisualGenerator _currentAnimatedVisualGenerator;
 
         protected InstantiatorGeneratorBase(
@@ -67,7 +69,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             _generateDependencyObject = configuration.GenerateDependencyObject;
             _stringifier = stringifier;
             _toolInfo = configuration.ToolInfo;
-
+            _interfaceType = configuration.InterfaceType;
             var graphs = configuration.ObjectGraphs;
 
             _animatedVisualGenerators = graphs.Select(g => new AnimatedVisualGenerator(this, g.graphRoot, g.requiredUapVersion, graphs.Count > 1)).ToArray();
@@ -136,6 +138,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             _loadedImageSurfaceInfosByNode = sharedLoadedImageSurfaceInfos.ToDictionary(n => n.node, n => n.loadedImageSurfaceNode);
         }
 
+        protected IAnimatedVisualSourceInfo AnimatedVisualSourceInfo => this;
+
         /// <summary>
         /// Takes a name and modifies it as necessary to be suited for use as a class name in languages such
         /// as  C# and C++.
@@ -188,9 +192,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         /// <summary>
         /// Writes the start of the file, e.g. using namespace statements and includes at the top of the file.
         /// </summary>
-        protected abstract void WriteFileStart(
-            CodeBuilder builder,
-            IAnimatedVisualSourceInfo info);
+        protected abstract void WriteFileStart(CodeBuilder builder);
 
         /// <summary>
         /// Writes the start of the IAnimatedVisual implementation class.
@@ -209,9 +211,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         /// <summary>
         /// Writes the end of the file.
         /// </summary>
-        protected abstract void WriteFileEnd(
-            CodeBuilder builder,
-            IAnimatedVisualSourceInfo info);
+        protected abstract void WriteFileEnd(CodeBuilder builder);
 
         /// <summary>
         /// Writes CanvasGeometery.Combination factory code.
@@ -449,7 +449,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             }
 
             // Write the start of the file. This is everything up to the start of the AnimatedVisual class.
-            WriteFileStart(builder, this);
+            WriteFileStart(builder);
 
             // Write the LoadedImageSurface byte arrays into the outer (IAnimatedVisualSource) class.
             WriteLoadedImageSurfaceArrays(builder);
@@ -472,7 +472,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             }
 
             // Write the end of the file.
-            WriteFileEnd(builder, this);
+            WriteFileEnd(builder);
 
             return builder.ToString();
         }
@@ -634,6 +634,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         string IAnimatedVisualSourceInfo.ClassName => _className;
 
         string IAnimatedVisualSourceInfo.Namespace => _namespace;
+
+        string IAnimatedVisualSourceInfo.Interface => _interfaceType;
 
         string IAnimatedVisualSourceInfo.ReusableExpressionAnimationFieldName => SingletonExpressionAnimationName;
 
