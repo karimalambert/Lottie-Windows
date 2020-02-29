@@ -21,6 +21,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         public override string DefaultInitialize => "{}";
 
+        public virtual string Hatted(string typeName) => typeName;
+
         public override string VariableInitialization(string value) => $"{{ {value} }}";
 
         public override string Namespace(string value) => value.Replace(".", "::");

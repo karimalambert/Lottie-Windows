@@ -21,9 +21,15 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         string ClassName { get; }
 
         /// <summary>
-        /// Get the namespace for the generated code.
+        /// Gets the namespace for the generated code.
         /// </summary>
         string Namespace { get; }
+
+        /// <summary>
+        /// Gets the name of the interface for the generated code, or null to generate
+        /// IAnimatedVisual/IAnimatedVisualSource.
+        /// </summary>
+        string Interface { get; }
 
         /// <summary>
         /// Gets the name of the field in the instantiator class that holds the reusable ExpressionAnimation.

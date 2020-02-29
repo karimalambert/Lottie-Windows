@@ -20,6 +20,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
     sealed class CSharpInstantiatorGenerator : InstantiatorGeneratorBase
     {
         readonly Stringifier _s;
+        readonly string _interface;
+        readonly string _sourceInterface;
 
         CSharpInstantiatorGenerator(
             CodegenConfiguration configuration,
@@ -30,7 +32,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                   stringifier: stringifier)
         {
             _s = stringifier;
+            _interface = _s.Namespace(AnimatedVisualSourceInfo.Interface ?? "Microsoft.UI.Xaml.IAnimatedVisual");
+            _sourceInterface = _sourceInterface + "Source";
         }
+
+        IAnimatedVisualSourceInfo Info => AnimatedVisualSourceInfo;
 
         /// <summary>
         /// Returns the C# code for a factory that will instantiate the given <see cref="Visual"/> as a
@@ -52,27 +58,27 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         /// <inheritdoc/>
         // Called by the base class to write the start of the file (i.e. everything up to the body of the Instantiator class).
-        protected override void WriteFileStart(CodeBuilder builder, IAnimatedVisualSourceInfo info)
+        protected override void WriteFileStart(CodeBuilder builder)
         {
             // A sorted set to hold the namespaces that the generated code will use. The set is maintained in sorted order.
             var namespaces = new SortedSet<string>();
 
-            if (info.UsesCanvas)
+            if (Info.UsesCanvas)
             {
                 namespaces.Add("Microsoft.Graphics.Canvas");
             }
 
-            if (info.UsesCanvasEffects)
+            if (Info.UsesCanvasEffects)
             {
                 namespaces.Add("Microsoft.Graphics.Canvas.Effects");
             }
 
-            if (info.UsesCanvasGeometry)
+            if (Info.UsesCanvasGeometry)
             {
                 namespaces.Add("Microsoft.Graphics.Canvas.Geometry");
             }
 
-            if (info.UsesNamespaceWindowsUIXamlMedia)
+            if (Info.UsesNamespaceWindowsUIXamlMedia)
             {
                 namespaces.Add("Windows.UI.Xaml.Media");
                 namespaces.Add("System.Runtime.InteropServices.WindowsRuntime");
@@ -80,17 +86,16 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 namespaces.Add("System.ComponentModel");
             }
 
-            if (info.GenerateDependencyObject)
+            if (Info.GenerateDependencyObject)
             {
                 namespaces.Add("Windows.UI.Xaml");
             }
 
-            if (info.UsesStreams)
+            if (Info.UsesStreams)
             {
                 namespaces.Add("System.IO");
             }
 
-            namespaces.Add("Microsoft.UI.Xaml.Controls");
             namespaces.Add("System");
             namespaces.Add("System.Numerics");
             namespaces.Add("Windows.UI");
@@ -104,7 +109,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             builder.WriteLine();
 
-            builder.WriteLine($"namespace {info.Namespace}");
+            builder.WriteLine($"namespace {Info.Namespace}");
             builder.OpenScope();
 
             // Write a description of the source as comments.
@@ -115,13 +120,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             // If the composition has LoadedImageSurface, write a class that implements the IDynamicAnimatedVisualSource interface.
             // Otherwise, implement the IAnimatedVisualSource interface.
-            if (info.LoadedImageSurfaces.Count > 0)
+            if (Info.LoadedImageSurfaces.Count > 0)
             {
-                WriteIDynamicAnimatedVisualSource(builder, info);
+                WriteIDynamicAnimatedVisualSource(builder, Info);
             }
             else
             {
-                WriteIAnimatedVisualSource(builder, info);
+                WriteIAnimatedVisualSource(builder, Info);
             }
 
             builder.CloseScope();
@@ -231,11 +236,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         {
             if (info.GenerateDependencyObject)
             {
-                builder.WriteLine($"sealed class {info.ClassName} : DependencyObject, IAnimatedVisualSource");
+                builder.WriteLine($"sealed class {info.ClassName} : DependencyObject, {_sourceInterface}");
             }
             else
             {
-                builder.WriteLine($"sealed class {info.ClassName} : IAnimatedVisualSource");
+                builder.WriteLine($"sealed class {info.ClassName} : {_sourceInterface}");
             }
 
             builder.OpenScope();
@@ -244,7 +249,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             WriteThemeMethodsAndFields(builder, info);
 
             // Generate the method that creates an instance of the animated visual.
-            builder.WriteLine("public IAnimatedVisual TryCreateAnimatedVisual(Compositor compositor, out object diagnostics)");
+            builder.WriteLine($"public {_interface} TryCreateAnimatedVisual(Compositor compositor, out object diagnostics)");
             builder.OpenScope();
             builder.WriteLine("diagnostics = null;");
             if (info.IsThemed)
@@ -412,7 +417,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.WriteLine();
 
             // Generate the method that creates an instance of the animated visual.
-            builder.WriteLine("public IAnimatedVisual TryCreateAnimatedVisual(Compositor compositor, out object diagnostics)");
+            builder.WriteLine($"public {_interface} TryCreateAnimatedVisual(Compositor compositor, out object diagnostics)");
             builder.OpenScope();
             builder.WriteLine("_isTryCreateAnimatedVisualCalled = true;");
             builder.WriteLine("diagnostics = null;");
@@ -484,7 +489,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         protected override void WriteAnimatedVisualStart(CodeBuilder builder, IAnimatedVisualInfo info)
         {
             // Start the instantiator class.
-            builder.WriteLine($"sealed class {info.ClassName} : IAnimatedVisual");
+            builder.WriteLine($"sealed class {info.ClassName} : {_interface}");
             builder.OpenScope();
         }
 
@@ -538,9 +543,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.WriteLine();
 
             // Write the IAnimatedVisual implementation.
-            builder.WriteLine("Visual IAnimatedVisual.RootVisual => _root;");
-            builder.WriteLine($"TimeSpan IAnimatedVisual.Duration => TimeSpan.FromTicks({info.AnimatedVisualSourceInfo.DurationTicksFieldName});");
-            builder.WriteLine($"Vector2 IAnimatedVisual.Size => {Vector2(info.AnimatedVisualSourceInfo.CompositionDeclaredSize)};");
+            builder.WriteLine($"public Visual RootVisual => _root;");
+            builder.WriteLine($"public TimeSpan Duration => TimeSpan.FromTicks({info.AnimatedVisualSourceInfo.DurationTicksFieldName});");
+            builder.WriteLine($"public Vector2 Size => {Vector2(info.AnimatedVisualSourceInfo.CompositionDeclaredSize)};");
             builder.WriteLine("void IDisposable.Dispose() => _root?.Dispose();");
             builder.WriteLine();
 
@@ -556,9 +561,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         /// <inheritdoc/>
         // Called by the base class to write the end of the file (i.e. everything after the body of the AnimatedVisual class).
-        protected override void WriteFileEnd(
-            CodeBuilder builder,
-            IAnimatedVisualSourceInfo info)
+        protected override void WriteFileEnd(CodeBuilder builder)
         {
             // Close the scope for the IAnimatedVisualSource class.
             builder.CloseScope();

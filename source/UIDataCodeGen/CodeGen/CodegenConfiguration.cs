@@ -56,6 +56,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         public bool GenerateDependencyObject { get; set; }
 
         /// <summary>
+        /// Defines the interface used in the generated code. If not set it defaults to
+        /// "Microsoft.UI.Xaml.Controls.IAnimatedVisual" which will cause the generation
+        /// of code for IAnimatedVisualSource and IAnimatedVisual.
+        /// </summary>
+        public string InterfaceType { get; set; }
+
+        /// <summary>
         /// The object graphs for which source will be generated.
         /// </summary>
         public IReadOnlyList<(CompositionObject graphRoot, uint requiredUapVersion)> ObjectGraphs { get; set; }

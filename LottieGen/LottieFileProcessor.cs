@@ -610,6 +610,7 @@ sealed class LottieFileProcessor
         return new CodegenConfiguration
         {
             ClassName = _className,
+            InterfaceType = string.IsNullOrWhiteSpace(_options.Interface) ? null : _options.Interface,
             Namespace = NormalizeNamespace(_options.Namespace),
             Width = _lottieComposition.Width,
             Height = _lottieComposition.Height,
@@ -618,7 +619,9 @@ sealed class LottieFileProcessor
             GenerateDependencyObject = _options.GenerateDependencyObject,
             SourceMetadata = _translationResults[0].SourceMetadata,
             ObjectGraphs = _translationResults.Select(tr => ((CompositionObject)tr.RootVisual, tr.MinimumRequiredUapVersion)).ToArray(),
-            ToolInfo = new[] { $"Command: {syntheticCommandLine}",  $"Version: {ThisAssembly.AssemblyInformationalVersion}" },
+            ToolInfo = _options.SuppressToolInfo
+                            ? null
+                            : new[] { $"Command: {syntheticCommandLine}", $"Version: {ThisAssembly.AssemblyInformationalVersion}" },
         };
     }
 

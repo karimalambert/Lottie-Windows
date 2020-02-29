@@ -42,22 +42,22 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             var cppText = generator.GenerateCode();
 
-            var hText = generator.GenerateHeaderText(generator);
+            var hText = generator.GenerateHeaderText();
 
             var assetList = generator.GetAssetsList();
 
             return (cppText, hText, assetList);
         }
 
-        protected override void WritePrivateThemeHeader(CodeBuilder builder, IAnimatedVisualSourceInfo info)
+        protected override void WritePrivateThemeHeader(CodeBuilder builder)
         {
             // Add a field to hold the theme property set.
-            builder.WriteLine($"{Wuc}::{T.CompositionPropertySet} {info.ThemePropertiesFieldName}{{ nullptr }};");
+            builder.WriteLine($"{Wuc}::{T.CompositionPropertySet} {SourceInfo.ThemePropertiesFieldName}{{ nullptr }};");
 
             // Add fields for each of the theme properties.
-            foreach (var prop in info.SourceMetadata.PropertyBindings)
+            foreach (var prop in SourceInfo.SourceMetadata.PropertyBindings)
             {
-                if (info.GenerateDependencyObject)
+                if (SourceInfo.GenerateDependencyObject)
                 {
                     builder.WriteLine($"static Windows::UI::Xaml::DependencyProperty^ _{S.CamelCase(prop.Name)}Property;");
                     builder.WriteLine($"static void On{prop.Name}Changed(Windows::UI::Xaml::DependencyObject^ d, Windows::UI::Xaml::DependencyPropertyChangedEventArgs^ e);");
@@ -75,12 +75,12 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.WriteLine();
         }
 
-        protected override void WritePublicThemeHeader(CodeBuilder builder, IAnimatedVisualSourceInfo info)
+        protected override void WritePublicThemeHeader(CodeBuilder builder)
         {
             // Write properties declarations for each themed property.
-            foreach (var prop in info.SourceMetadata.PropertyBindings)
+            foreach (var prop in SourceInfo.SourceMetadata.PropertyBindings)
             {
-                if (info.GenerateDependencyObject)
+                if (SourceInfo.GenerateDependencyObject)
                 {
                     builder.WriteLine($"static Windows::UI::Xaml::DependencyProperty^ {prop.Name}Property();");
                     builder.WriteLine();
@@ -94,81 +94,79 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 builder.WriteLine();
             }
 
-            // TODO - if IThemedAnimatedVisualSource is enabled then this becomes virtual, otherwise not.
-            //builder.WriteLine($"virtual {wuc}::{_typeName.CompositionPropertySet} GetThemeProperties({wuc}::{_typeName.Compositor} compositor);");
-            builder.WriteLine($"{Wuc}::{T.CompositionPropertySet} GetThemeProperties({Wuc}::{T.Compositor} compositor);");
+            builder.WriteLine($"{(SourceInfo.Interface == null ? string.Empty : "virtual ")}{Wuc}::{T.CompositionPropertySet} GetThemeProperties({Wuc}::{T.Compositor} compositor);");
             builder.WriteLine();
         }
 
-        protected override void WriteThemePropertyImpls(CodeBuilder builder, IAnimatedVisualSourceInfo info)
+        protected override void WriteThemePropertyImpls(CodeBuilder builder)
         {
-            builder.WriteLine($"{T.CompositionPropertySet} {S.Namespace(info.Namespace)}::{info.ClassName}::EnsureThemeProperties({T.Compositor} compositor)");
+            builder.WriteLine($"{T.CompositionPropertySet} {S.Namespace(SourceInfo.Namespace)}::{SourceClassName}::EnsureThemeProperties({T.Compositor} compositor)");
             builder.OpenScope();
-            builder.WriteLine($"if ({info.ThemePropertiesFieldName} == nullptr)");
+            builder.WriteLine($"if ({SourceInfo.ThemePropertiesFieldName} == nullptr)");
             builder.OpenScope();
-            builder.WriteLine($"{info.ThemePropertiesFieldName} = compositor{S.Deref}CreatePropertySet();");
+            builder.WriteLine($"{SourceInfo.ThemePropertiesFieldName} = compositor{S.Deref}CreatePropertySet();");
 
             // Initialize the values in the property set.
-            foreach (var prop in info.SourceMetadata.PropertyBindings)
+            foreach (var prop in SourceInfo.SourceMetadata.PropertyBindings)
             {
-                WriteThemePropertyInitialization(builder, info.ThemePropertiesFieldName, prop, prop.Name);
+                WriteThemePropertyInitialization(builder, SourceInfo.ThemePropertiesFieldName, prop, prop.Name);
             }
 
             builder.CloseScope();
             builder.WriteLine();
-            builder.WriteLine($"return {info.ThemePropertiesFieldName};");
+            builder.WriteLine($"return {SourceInfo.ThemePropertiesFieldName};");
             builder.CloseScope();
             builder.WriteLine();
 
-            builder.WriteLine($"{T.CompositionPropertySet} {S.Namespace(info.Namespace)}::{info.ClassName}::GetThemeProperties({T.Compositor} compositor)");
+            builder.WriteLine($"{T.CompositionPropertySet} {S.Namespace(SourceInfo.Namespace)}::{SourceClassName}::GetThemeProperties({T.Compositor} compositor)");
             builder.OpenScope();
             builder.WriteLine("return EnsureThemeProperties(compositor);");
             builder.CloseScope();
             builder.WriteLine();
 
             // Write property implementations for each theme property.
-            foreach (var prop in info.SourceMetadata.PropertyBindings)
+            foreach (var prop in SourceInfo.SourceMetadata.PropertyBindings)
             {
-                if (info.GenerateDependencyObject)
+                if (SourceInfo.GenerateDependencyObject)
                 {
                     // Write the dependency property accessor.
-                    builder.WriteLine($"DependencyProperty^ {S.Namespace(info.Namespace)}::{info.ClassName}::{prop.Name}Property()");
+                    builder.WriteLine($"DependencyProperty^ {S.Namespace(SourceInfo.Namespace)}::{SourceClassName}::{prop.Name}Property()");
                     builder.OpenScope();
                     builder.WriteLine($"return _{S.CamelCase(prop.Name)}Property;");
                     builder.CloseScope();
                     builder.WriteLine();
 
                     // Write the dependency property change handler.
-                    builder.WriteLine($"void {S.Namespace(info.Namespace)}::{info.ClassName}::On{prop.Name}Changed(DependencyObject^ d, DependencyPropertyChangedEventArgs^ e)");
+                    builder.WriteLine($"void {S.Namespace(SourceInfo.Namespace)}::{SourceClassName}::On{prop.Name}Changed(DependencyObject^ d, DependencyPropertyChangedEventArgs^ e)");
                     builder.OpenScope();
-                    builder.WriteLine($"auto self = ({S.Namespace(info.Namespace)}::{info.ClassName}^)d;");
+                    builder.WriteLine($"auto self = ({S.Namespace(SourceInfo.Namespace)}::{SourceClassName}^)d;");
                     builder.WriteLine();
                     builder.WriteLine("if (self->_themeProperties != nullptr)");
                     builder.OpenScope();
-                    WriteThemePropertyInitialization(builder, $"self->{info.ThemePropertiesFieldName}", prop, "e->NewValue");
+                    WriteThemePropertyInitialization(builder, $"self->{SourceInfo.ThemePropertiesFieldName}", prop, "e->NewValue");
                     builder.CloseScope();
                     builder.CloseScope();
                     builder.WriteLine();
 
                     // Write the dependency property initializer.
-                    builder.WriteLine($"DependencyProperty^ {S.Namespace(info.Namespace)}::{info.ClassName}::_{S.CamelCase(prop.Name)}Property =");
+                    builder.WriteLine($"DependencyProperty^ {S.Namespace(SourceInfo.Namespace)}::{SourceClassName}::_{S.CamelCase(prop.Name)}Property =");
                     builder.Indent();
                     builder.WriteLine($"DependencyProperty::Register(");
                     builder.Indent();
                     builder.WriteLine($"{S.String(prop.Name)},");
                     builder.WriteLine($"{TypeName(prop.ExposedType)}::typeid,");
-                    builder.WriteLine($"{S.Namespace(info.Namespace)}::{info.ClassName}::typeid,");
+                    builder.WriteLine($"{S.Namespace(SourceInfo.Namespace)}::{SourceClassName}::typeid,");
                     builder.WriteLine($"ref new PropertyMetadata({GetDefaultPropertyBindingValue(prop)},");
-                    builder.WriteLine($"ref new PropertyChangedCallback(&{S.Namespace(info.Namespace)}::{info.ClassName}::On{prop.Name}Changed)));");
+                    builder.WriteLine($"ref new PropertyChangedCallback(&{S.Namespace(SourceInfo.Namespace)}::{SourceClassName}::On{prop.Name}Changed)));");
                     builder.UnIndent();
                     builder.UnIndent();
                     builder.WriteLine();
                 }
 
                 // Write the getter.
-                builder.WriteLine($"{TypeName(prop.ExposedType)} {info.Namespace}::{info.ClassName}::{prop.Name}::get()");
+                builder.WriteLine($"{TypeName(prop.ExposedType)} {SourceInfo.Namespace}::{SourceClassName}::{prop.Name}::get()");
                 builder.OpenScope();
-                if (info.GenerateDependencyObject)
+                if (SourceInfo.GenerateDependencyObject)
                 {
                     // Get the value from the dependency property.
                     builder.WriteLine($"return ({TypeName(prop.ExposedType)})GetValue(_{S.CamelCase(prop.Name)}Property);");
@@ -183,9 +181,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 builder.WriteLine();
 
                 // Write the setter.
-                builder.WriteLine($"void {info.Namespace}::{info.ClassName}::{prop.Name}::set({TypeName(prop.ExposedType)} value)");
+                builder.WriteLine($"void {SourceInfo.Namespace}::{SourceClassName}::{prop.Name}::set({TypeName(prop.ExposedType)} value)");
                 builder.OpenScope();
-                if (info.GenerateDependencyObject)
+                if (SourceInfo.GenerateDependencyObject)
                 {
                     builder.WriteLine($"SetValue(_{S.CamelCase(prop.Name)}Property, value);");
                 }
@@ -208,7 +206,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         string GetDefaultPropertyBindingValue(PropertyBinding prop)
              => prop.ExposedType switch
              {
-                 PropertySetValueType.Color => $"ColorHelper::FromArgb({S.ColorArgs((WinCompData.Wui.Color)prop.DefaultValue)})",
+                 PropertySetValueType.Color => $"Windows::UI::ColorHelper::FromArgb({S.ColorArgs((WinCompData.Wui.Color)prop.DefaultValue)})",
 
                  // Scalars are stored as floats, but exposed as doubles as XAML markup prefers doubles.
                  PropertySetValueType.Scalar => S.Double((float)prop.DefaultValue),

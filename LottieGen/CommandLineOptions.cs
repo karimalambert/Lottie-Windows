@@ -37,6 +37,8 @@ sealed class CommandLineOptions
 
     internal string InputFile { get; private set; }
 
+    internal string Interface { get; private set; }
+
     internal IEnumerable<Lang> Languages { get; private set; }
 
     internal string OutputFolder { get; private set; }
@@ -54,6 +56,8 @@ sealed class CommandLineOptions
     internal uint? MinimumUapVersion { get; private set; }
 
     internal uint? TargetUapVersion { get; private set; }
+
+    internal bool SuppressToolInfo { get; private set; }
 
     // Returns a command line equivalent to the current set of options, but
     // without the InputFolder, OutputPath or Language options.
@@ -96,6 +100,11 @@ sealed class CommandLineOptions
             sb.Append($" -{nameof(TargetUapVersion)} {TargetUapVersion.Value}");
         }
 
+        if (!string.IsNullOrWhiteSpace(Interface))
+        {
+            sb.Append($" -{nameof(Interface)} {Interface}");
+        }
+
         return sb.ToString();
     }
 
@@ -107,12 +116,14 @@ sealed class CommandLineOptions
         DisableTranslationOptimizer,
         Help,
         InputFile,
+        Interface,
         GenerateDependencyObject,
         Language,
         MinimumUapVersion,
         Namespace,
         OutputFolder,
         Strict,
+        SuppressToolInfo,
         TargetUapVersion,
     }
 
@@ -168,11 +179,13 @@ sealed class CommandLineOptions
             .AddPrefixedKeyword("generatedependencyobject", Keyword.GenerateDependencyObject)
             .AddPrefixedKeyword("help", Keyword.Help)
             .AddPrefixedKeyword("inputfile", Keyword.InputFile)
+            .AddPrefixedKeyword("interface", Keyword.Interface)
             .AddPrefixedKeyword("language", Keyword.Language)
+            .AddPrefixedKeyword("minimumuapversion", Keyword.MinimumUapVersion)
             .AddPrefixedKeyword("namespace", Keyword.Namespace)
             .AddPrefixedKeyword("outputfolder", Keyword.OutputFolder)
             .AddPrefixedKeyword("strict", Keyword.Strict)
-            .AddPrefixedKeyword("minimumuapversion", Keyword.MinimumUapVersion)
+            .AddPrefixedKeyword("suppresstoolinfo", Keyword.SuppressToolInfo)
             .AddPrefixedKeyword("targetuapversion", Keyword.TargetUapVersion);
 
         // The last keyword recognized. This defines what the following parameter value is for,
@@ -204,6 +217,9 @@ sealed class CommandLineOptions
                         case Keyword.Strict:
                             StrictMode = true;
                             break;
+                        case Keyword.SuppressToolInfo:
+                            SuppressToolInfo = true;
+                            break;
                         case Keyword.DisableCodeGenOptimizer:
                             DisableCodeGenOptimizer = true;
                             break;
@@ -213,6 +229,7 @@ sealed class CommandLineOptions
 
                         // The following keywords require a parameter as the next token.
                         case Keyword.InputFile:
+                        case Keyword.Interface:
                         case Keyword.Language:
                         case Keyword.Namespace:
                         case Keyword.OutputFolder:
@@ -236,6 +253,18 @@ sealed class CommandLineOptions
                     InputFile = arg;
                     previousKeyword = Keyword.None;
                     break;
+
+                case Keyword.Interface:
+                    if (Interface != null)
+                    {
+                        ErrorDescription = ArgumentSpecifiedMoreThanOnce("Interface");
+                        return;
+                    }
+
+                    Interface = arg;
+                    previousKeyword = Keyword.None;
+                    break;
+
                 case Keyword.Language:
                     _languageStrings.Add(arg);
                     break;

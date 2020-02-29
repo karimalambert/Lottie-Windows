@@ -19,5 +19,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     : $"{value}^";
 
         public override string StringType => "String^";
+
+        public override string Hatted(string typeName) => $"{typeName}^";
     }
 }
