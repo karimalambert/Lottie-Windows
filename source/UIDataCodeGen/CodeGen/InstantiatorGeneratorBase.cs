@@ -1333,6 +1333,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             void WriteHelperExpressionAnimationBinder(CodeBuilder builder)
             {
+                // 1 reference parameter version.
                 builder.WriteLine($"void BindProperty(");
                 builder.Indent();
                 builder.WriteLine($"{ReferenceTypeName("CompositionObject")} target,");
@@ -1345,6 +1346,26 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 builder.WriteLine($"{SingletonExpressionAnimationName}{Deref}ClearAllParameters();");
                 WritePropertySetStatement(builder, SingletonExpressionAnimationName, "Expression", "expression");
                 builder.WriteLine($"{SingletonExpressionAnimationName}{Deref}SetReferenceParameter(referenceParameterName, referencedObject);");
+                builder.WriteLine($"target{Deref}StartAnimation(animatedPropertyName, {SingletonExpressionAnimationName});");
+                builder.CloseScope();
+                builder.WriteLine();
+
+                // 2 reference parameter version.
+                builder.WriteLine($"void BindProperty2(");
+                builder.Indent();
+                builder.WriteLine($"{ReferenceTypeName("CompositionObject")} target,");
+                builder.WriteLine($"{_stringifier.StringType} animatedPropertyName,");
+                builder.WriteLine($"{_stringifier.StringType} expression,");
+                builder.WriteLine($"{_stringifier.StringType} referenceParameterName0,");
+                builder.WriteLine($"{ReferenceTypeName("CompositionObject")} referencedObject0,");
+                builder.WriteLine($"{_stringifier.StringType} referenceParameterName1,");
+                builder.WriteLine($"{ReferenceTypeName("CompositionObject")} referencedObject1)");
+                builder.UnIndent();
+                builder.OpenScope();
+                builder.WriteLine($"{SingletonExpressionAnimationName}{Deref}ClearAllParameters();");
+                WritePropertySetStatement(builder, SingletonExpressionAnimationName, "Expression", "expression");
+                builder.WriteLine($"{SingletonExpressionAnimationName}{Deref}SetReferenceParameter(referenceParameterName0, referencedObject0);");
+                builder.WriteLine($"{SingletonExpressionAnimationName}{Deref}SetReferenceParameter(referenceParameterName1, referencedObject1);");
                 builder.WriteLine($"target{Deref}StartAnimation(animatedPropertyName, {SingletonExpressionAnimationName});");
                 builder.CloseScope();
                 builder.WriteLine();
@@ -1889,16 +1910,35 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 if (referenceParameters.Length == 1 &&
                     string.IsNullOrWhiteSpace(animation.Target))
                 {
-                    var rp = referenceParameters[0];
-                    var referenceParameterName = GetReferenceParameterName(obj, localName, animationNode, rp);
+                    var rp0 = referenceParameters[0];
+                    var rp0Name = GetReferenceParameterName(obj, localName, animationNode, rp0);
 
                     // Special-case where there is exactly one reference parameter. Call a helper.
                     builder.WriteLine(
                         $"BindProperty({localName}, " + // target
                         $"{String(animator.AnimatedProperty)}, " + // property on target
                         $"{String(animation.Expression.ToText())}, " + // expression
-                        $"{String(rp.Key)}, " + // reference property name
-                        $"{referenceParameterName});"); // reference object
+                        $"{String(rp0.Key)}, " + // reference property name
+                        $"{rp0Name});"); // reference object
+                }
+                else if (referenceParameters.Length == 2 &&
+                    string.IsNullOrWhiteSpace(animation.Target))
+                {
+                    var rp0 = referenceParameters[0];
+                    var rp0Name = GetReferenceParameterName(obj, localName, animationNode, rp0);
+
+                    var rp1 = referenceParameters[1];
+                    var rp1Name = GetReferenceParameterName(obj, localName, animationNode, rp1);
+
+                    // Special-case where there are exactly two reference parameters. Call a helper.
+                    builder.WriteLine(
+                        $"BindProperty2({localName}, " + // target
+                        $"{String(animator.AnimatedProperty)}, " + // property on target
+                        $"{String(animation.Expression.ToText())}, " + // expression
+                        $"{String(rp0.Key)}, " + // reference property name
+                        $"{rp0Name}, " + // reference object
+                        $"{String(rp1.Key)}, " + // reference property name
+                        $"{rp1Name});"); // reference object
                 }
                 else
                 {
