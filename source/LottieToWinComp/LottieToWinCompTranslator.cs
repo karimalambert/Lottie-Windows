@@ -30,6 +30,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using Microsoft.Toolkit.Uwp.UI.Lottie.LottieData;
 using Microsoft.Toolkit.Uwp.UI.Lottie.LottieData.Optimization;
 using Microsoft.Toolkit.Uwp.UI.Lottie.LottieMetadata;
@@ -224,7 +225,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                     // Add a description if not added already.
                     if (translatedLayer.ShortDescription == null)
                     {
-                        Describe(translatedLayer, $"Layer ({layer.Type}): {layer.Name}");
+                        Describe(translatedLayer, $"{layer.Type} layer: {layer.Name}");
                     }
                 }
             }
@@ -860,12 +861,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
 #if !NoInvisibility
 #if ControllersSynchronizationWorkaround
-                // Animate between Matrix3x2(0,0,0,0,0,0) and Matrix3x2(1,0,0,1,0,0) (i.e. between 0 and identity).
+                // Animate between Matrix3x2(0,0,0,1,0,0) and Matrix3x2(1,0,0,1,0,0) (i.e. between Scale(0,1) and identity).
+                // Note that this could be equivalently achieved through a Scale animation.
                 var visibilityAnimation = _c.CreateScalarKeyFrameAnimation();
                 if (inProgress > 0)
                 {
                     // Set initial value to be non-visible (default is visible).
-                    visibilityNode.TransformMatrix = default(Sn.Matrix3x2);
+                    visibilityNode.TransformMatrix = new Sn.Matrix3x2(m11: 0, m12: 0, m21: 0, m22: 1, m31: 0, m32: 0);
                     visibilityAnimation.InsertKeyFrame(inProgress, 1, _c.CreateHoldThenStepEasingFunction());
                 }
 
@@ -876,15 +878,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
                 visibilityAnimation.Duration = _lc.Duration;
                 StartKeyframeAnimation(visibilityNode, "TransformMatrix._11", visibilityAnimation);
-
-                // M11 and M22 need to have the same value. Either tie them together with an expression, or
-                // use the same keyframe animation for both. Probably cheaper to use an expression.
-                var m11expression = _c.CreateExpressionAnimation(TransformMatrixM11Expression);
-                m11expression.SetReferenceParameter("my", visibilityNode);
-                StartExpressionAnimation(visibilityNode, "TransformMatrix._22", m11expression);
-
-                // Alternative is to use the same key frame animation on M22.
-                //StartKeyframeAnimation(visibilityNode, "TransformMatrix._22", visibilityAnimation);
 #else
                 var visibilityExpression =
                     ExpressionFactory.CreateProgressExpression(
@@ -1896,6 +1889,18 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             }
         }
 
+        CanvasGeometry CreateWin2dPathGeometry(Path path, ShapeFill.PathFillType fillType)
+        {
+            var result = CreateWin2dPathGeometry(path.Data.InitialValue, fillType, transformMatrix: Sn.Matrix3x2.Identity, optimizeLines: true);
+
+            if (_addDescriptions)
+            {
+                Describe(result, path.Name);
+            }
+
+            return result;
+        }
+
         CanvasGeometry CreateWin2dPathGeometry(
             Sequence<BezierSegment> figure,
             ShapeFill.PathFillType fillType,
@@ -2312,7 +2317,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             var compositionPath = new CompositionPath(
                 CanvasGeometry.CreateGroup(
                     null,
-                    paths.Select(sh => CreateWin2dPathGeometry(sh.Data.InitialValue, fillType, Sn.Matrix3x2.Identity, optimizeLines: true)).ToArray(),
+                    paths.Select(p => CreateWin2dPathGeometry(p, fillType)).ToArray(),
                     FilledRegionDetermination(fillType)));
 
             compositionPathGeometry.Path = compositionPath;
@@ -3047,6 +3052,12 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             for (var i = 0; i < stopsCount; i++)
             {
                 var gradientStop = _c.CreateColorGradientStop();
+
+                if (_addDescriptions)
+                {
+                    Describe(gradientStop, $"Stop {i}");
+                }
+
                 brush.ColorStops.Add(gradientStop);
 
                 // Extract the color key frames for this stop.
@@ -3091,6 +3102,12 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             for (var i = 0; i < stopsCount; i++)
             {
                 var gradientStop = _c.CreateColorGradientStop();
+
+                if (_addDescriptions)
+                {
+                    Describe(gradientStop, $"Stop {i}");
+                }
+
                 brush.ColorStops.Add(gradientStop);
 
                 // Extract the color key frames for this stop.
@@ -3143,10 +3160,20 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             IEnumerable<ColorGradientStop> gradientStops,
             Opacity opacity)
         {
+            var i = 0;
             foreach (var stop in gradientStops)
             {
                 var color = stop.Color * opacity;
-                brush.ColorStops.Add(_c.CreateColorGradientStop(Float(stop.Offset), color));
+
+                var gradientStop = _c.CreateColorGradientStop(Float(stop.Offset), color);
+
+                if (_addDescriptions)
+                {
+                    Describe(gradientStop, $"Stop {i}");
+                }
+
+                brush.ColorStops.Add(gradientStop);
+                i++;
             }
         }
 
@@ -3175,25 +3202,33 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
             var opacityExpressions = animatableOpacities.Select(ao => Expr.Scalar($"my.{ao.name}")).ToArray();
 
+            var i = 0;
             foreach (var stop in gradientStops)
             {
-                var colorStop = _c.CreateColorGradientStop();
-                colorStop.Offset = Float(stop.Offset);
+                var gradientStop = _c.CreateColorGradientStop();
+
+                if (_addDescriptions)
+                {
+                    Describe(gradientStop, $"Stop {i}");
+                }
+
+                gradientStop.Offset = Float(stop.Offset);
 
                 if (stop.Color.A == 0)
                 {
                     // The stop has 0 alpha, so no point multiplying it by opacity.
-                    colorStop.Color = Color(stop.Color);
+                    gradientStop.Color = Color(stop.Color);
                 }
                 else
                 {
                     // Bind the color to the opacity multiplied by the color.
                     var anim = _c.CreateExpressionAnimation(ColorMultipliedByPreMultipliedOpacities(Color(stop.Color), opacityExpressions));
                     anim.SetReferenceParameter("my", brush.Properties);
-                    StartExpressionAnimation(colorStop, "Color", anim);
+                    StartExpressionAnimation(gradientStop, "Color", anim);
                 }
 
-                brush.ColorStops.Add(colorStop);
+                brush.ColorStops.Add(gradientStop);
+                i++;
             }
         }
 

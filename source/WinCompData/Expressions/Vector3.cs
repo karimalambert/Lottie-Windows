@@ -74,7 +74,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.Expressions
 
             /// <inheritdoc/>
             protected override string CreateExpressionText()
-                => $"Vector3({Parenthesize(X)},{Parenthesize(Y)},{Parenthesize(Z)})";
+                => $"Vector3({X},{Y},{Z})";
 
             protected override bool IsAtomic => true;
         }

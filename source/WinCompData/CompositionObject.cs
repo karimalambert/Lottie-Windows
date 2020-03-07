@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.MetaData;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.Tools;
 
 namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData
@@ -118,17 +119,15 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData
             // If the animation is frozen, it is safe to not do the clone.
             var clone = animation.IsFrozen ? animation : animation.Clone();
 
-            var animator = new Animator
-            {
-                Animation = clone,
-                AnimatedProperty = target,
-                AnimatedObject = this,
-            };
+            var controller = animation is ExpressionAnimation
+                ? null
+                : new AnimationController(this, target);
 
-            if (!(animation is ExpressionAnimation))
-            {
-                animator.Controller = new AnimationController(this, target);
-            }
+            var animator = new Animator(
+                                animatedProperty: target,
+                                animatedObject: this,
+                                animation: clone,
+                                controller: controller);
 
             _animators.Add(animator);
         }
@@ -153,19 +152,35 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData
         /// </summary>
         public sealed class Animator
         {
+            internal Animator(
+                string animatedProperty,
+                CompositionObject animatedObject,
+                CompositionAnimation animation,
+                AnimationController controller)
+            {
+                AnimatedProperty = animatedProperty;
+                AnimatedObject = animatedObject;
+                Animation = animation;
+                Controller = controller;
+            }
+
             /// <summary>
             /// Gets the property being animated by this animator.
+            /// This could be the name of a property on the object, the name
+            /// of a property in the <see cref="CompositionPropertySet"/> of the
+            /// object, or a dotted path to a property of a property on the object
+            /// or in the <see cref="CompositionPropertySet"/> of the object.
             /// </summary>
-            public string AnimatedProperty { get; internal set; }
+            public string AnimatedProperty { get; }
 
             /// <summary>
             /// Gets the object whose property is being animated by this animator.
             /// </summary>
-            public CompositionObject AnimatedObject { get; internal set; }
+            public CompositionObject AnimatedObject { get; }
 
-            public CompositionAnimation Animation { get; internal set; }
+            public CompositionAnimation Animation { get; }
 
-            public AnimationController Controller { get; internal set; }
+            public AnimationController Controller { get; }
 
             /// <inheritdoc/>
             public override string ToString() => $"{Animation.Type} bound to {AnimatedProperty}";

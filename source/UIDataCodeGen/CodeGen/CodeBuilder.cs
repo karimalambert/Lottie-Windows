@@ -17,6 +17,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         const int IndentSize = 4;
         const int LineBreakWidth = 83;
         readonly List<CodeLine> _lines = new List<CodeLine>();
+        readonly SortedDictionary<string, CodeBuilder> _subBuilders = new SortedDictionary<string, CodeBuilder>();
         int _indentCount = 0;
 
         internal bool IsEmpty => _lines.Count == 0;
@@ -106,6 +107,20 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         {
             _lines.Add(new CodeLine { Text = builder, IndentCount = _indentCount });
         }
+
+        /// <summary>
+        /// Writes the contents of the given <see cref="CodeBuilder"/> and retains
+        /// it for later access using the given key.
+        /// </summary>
+        internal void WriteSubBuilder(string key)
+        {
+            var builder = new CodeBuilder();
+            WriteCodeBuilder(builder);
+            _subBuilders.Add(key, builder);
+        }
+
+        internal CodeBuilder GetSubBuilder(string key)
+            => _subBuilders[key];
 
         internal void OpenScope()
         {

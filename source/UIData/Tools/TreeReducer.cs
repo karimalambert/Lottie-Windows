@@ -6,16 +6,29 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using System.Text;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData;
 
 namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 {
     /// <summary>
-    /// Optimizes a <see cref="Visual"/> tree by combining and removing containers.
+    /// Optimizes a <see cref="Visual"/> tree by combining and removing containers and
+    /// removing containers that are empty.
     /// </summary>
     static class TreeReducer
     {
         internal static Visual OptimizeContainers(Visual root)
+        {
+            // Running the optimization multiple times can improve the results.
+            for (var i = 0; i < 2; i++)
+            {
+                root = Optimize(root);
+            }
+
+            return root;
+        }
+
+        static Visual Optimize(Visual root)
         {
             var graph = ObjectGraph<Node>.FromCompositionObject(root, includeVertices: true);
 
@@ -47,7 +60,293 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             SimplifyProperties(graph);
             CoalesceContainerShapes(graph);
             CoalesceContainerVisuals(graph);
+            RemoveRedundantInsetClipVisuals(graph);
+            PushSharedVisiblityUp(graph);
+            CoalesceOrthogonalContainerVisuals(graph);
+
             return root;
+        }
+
+        // Finds ContainerShapes that only exist to control visibility and if there are multiple of
+        // them at the same level, replace them with a single ContainerShape.
+        static void PushSharedVisiblityUp(ObjectGraph<Node> graph)
+        {
+            var children1 = graph.CompositionObjectNodes.Where(n =>
+                n.Object is IContainShapes shapeContainer &&
+                shapeContainer.Shapes.Count > 1
+            ).ToArray();
+
+            foreach (var ch in children1)
+            {
+                var container = (IContainShapes)ch.Object;
+                var grouped = GroupSimilarChildContainers(container).ToArray();
+
+                if (grouped.Any(g => g.Length > 1))
+                {
+                    // There was some grouping. Clear out the children and replace them.
+                    container.Shapes.Clear();
+                    foreach (var group in grouped)
+                    {
+                        var first = group[0];
+                        container.Shapes.Add(first);
+
+                        if (group.Length > 1)
+                        {
+                            // All of the items in the group will share the first container.
+                            var firstContainer = (CompositionContainerShape)first;
+                            for (var i = 1; i < group.Length; i++)
+                            {
+                                // Move the first child of each of the other containers into this container.
+                                firstContainer.Shapes.Add(((CompositionContainerShape)group[i]).Shapes[0]);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        static IEnumerable<CompositionShape[]> GroupSimilarChildContainers(IContainShapes container)
+        {
+            List<CompositionContainerShape> grouped = new List<CompositionContainerShape>();
+
+            foreach (var child in container.Shapes)
+            {
+                if (!(child is CompositionContainerShape childContainer))
+                {
+                    if (grouped.Count > 0)
+                    {
+                        yield return grouped.ToArray();
+                        grouped.Clear();
+                    }
+
+                    yield return new[] { child };
+                }
+                else
+                {
+                    // It's a container.
+                    if (grouped.Count == 0)
+                    {
+                        grouped.Add(childContainer);
+                    }
+                    else
+                    {
+                        // See if it belongs in the current group. It does if it is the same as
+                        // the first item in the group except for having different children.
+                        if (IsEquivalentContainer(grouped[0], childContainer))
+                        {
+                            grouped.Add(childContainer);
+                        }
+                        else
+                        {
+                            yield return grouped.ToArray();
+                            grouped.Clear();
+                            grouped.Add(childContainer);
+                        }
+                    }
+                }
+            }
+
+            if (grouped.Count > 0)
+            {
+                yield return grouped.ToArray();
+            }
+        }
+
+        static bool IsEquivalentContainer(CompositionContainerShape a, CompositionContainerShape b)
+        {
+            if (a.Animators.Count != b.Animators.Count)
+            {
+                return false;
+            }
+
+            if (a.TransformMatrix != b.TransformMatrix ||
+                a.CenterPoint != b.CenterPoint ||
+                a.Offset != b.Offset ||
+                a.RotationAngleInDegrees != b.RotationAngleInDegrees ||
+                a.Scale != b.Scale ||
+                a.Properties.Names.Count > 0 || b.Properties.Names.Count > 0)
+            {
+                return false;
+            }
+
+            if (a.Animators.Count > 0)
+            {
+                // There are some animations. Compare them.
+                for (var i = 0; i < a.Animators.Count; i++)
+                {
+                    var aAnimator = a.Animators[i];
+                    var bAnimator = b.Animators[i];
+
+                    if (!AreAnimatorsEqual((a, aAnimator), (b, bAnimator)))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        static bool AreAnimatorsEqual(
+            (CompositionObject owner, CompositionObject.Animator animator) a,
+            (CompositionObject owner, CompositionObject.Animator animator) b)
+        {
+            if (a.animator.AnimatedProperty != b.animator.AnimatedProperty)
+            {
+                return false;
+            }
+
+            if (a.animator.AnimatedObject != a.owner || b.animator.AnimatedObject != b.owner)
+            {
+                // We only handle the case of the animated object being the owner.
+                return false;
+            }
+
+            if (a.animator.Animation.Type != b.animator.Animation.Type)
+            {
+                return false;
+            }
+
+            switch (a.animator.Animation.Type)
+            {
+                case CompositionObjectType.ExpressionAnimation:
+                    {
+                        var aAnimation = (ExpressionAnimation)a.animator.Animation;
+                        var bAnimation = (ExpressionAnimation)b.animator.Animation;
+                        if (aAnimation.Expression != bAnimation.Expression)
+                        {
+                            return false;
+                        }
+
+                        var aRefs = aAnimation.ReferenceParameters.ToArray();
+                        var bRefs = bAnimation.ReferenceParameters.ToArray();
+
+                        if (aRefs.Length != bRefs.Length)
+                        {
+                            return false;
+                        }
+
+                        for (var i = 0; i < aRefs.Length; i++)
+                        {
+                            var aRef = aRefs[i].Value;
+                            var bRef = bRefs[i].Value;
+                            if (aRef == bRef || (aRef == a.owner && bRef == b.owner))
+                            {
+                                return true;
+                            }
+                        }
+                    }
+
+                    break;
+
+                case CompositionObjectType.ScalarKeyFrameAnimation:
+                    {
+                        var aAnimation = (ScalarKeyFrameAnimation)a.animator.Animation;
+                        var bAnimation = (ScalarKeyFrameAnimation)b.animator.Animation;
+                        if (aAnimation == bAnimation)
+                        {
+                            return true;
+                        }
+                    }
+
+                    break;
+
+                case CompositionObjectType.Vector2KeyFrameAnimation:
+                    {
+                        var aAnimation = (Vector2KeyFrameAnimation)a.animator.Animation;
+                        var bAnimation = (Vector2KeyFrameAnimation)b.animator.Animation;
+                        if (aAnimation == bAnimation)
+                        {
+                            return true;
+                        }
+                    }
+
+                    break;
+
+                // For now we only handle some types of animations.
+                case CompositionObjectType.ColorKeyFrameAnimation:
+                case CompositionObjectType.PathKeyFrameAnimation:
+                case CompositionObjectType.Vector3KeyFrameAnimation:
+                case CompositionObjectType.Vector4KeyFrameAnimation:
+                    return false;
+
+                default:
+                    throw new InvalidOperationException();
+            }
+
+            // TODO - if it's an expression animation, the reference parameters have to be
+            //         pointing to the same object, or they must be pointing to the owner object.
+            return false;
+        }
+
+        // Finds ContainerVisual with a single ShapeVisual child where the ContainerVisual
+        // only exists to set an InsetClip. In this case the ContainerVisual can be removed
+        // because the ShapeVisual has an implicit InsetClip.
+        static void RemoveRedundantInsetClipVisuals(ObjectGraph<Node> graph)
+        {
+            var containersClippingShapeVisuals = graph.CompositionObjectNodes.Where(n =>
+
+                    // Find the ContainerVisuals that have only a Clip and Size set and have one
+                    // child that is a ShapeVisual.
+                    n.Object is ContainerVisual container &&
+                    container.CenterPoint is null &&
+                    container.Clip != null &&
+                    container.Clip.Type == CompositionObjectType.InsetClip &&
+                    container.Offset is null &&
+                    container.Opacity is null &&
+                    container.RotationAngleInDegrees is null &&
+                    container.Scale is null &&
+                    container.Size != null &&
+                    container.TransformMatrix is null &&
+                    container.Animators.Count == 0 &&
+                    container.Properties.Names.Count == 0 &&
+                    container.Children.Count == 1 &&
+                    container.Children[0].Type == CompositionObjectType.ShapeVisual
+            ).ToArray();
+
+            foreach (var (node, obj) in containersClippingShapeVisuals)
+            {
+                var container = (ContainerVisual)obj;
+                var shapeVisual = (ShapeVisual)container.Children[0];
+
+                // Check that the clip and size on the container is the same
+                // as the size on the shape.
+                var clip = (InsetClip)container.Clip;
+                if (clip.TopInset != 0 ||
+                    clip.RightInset != 0 ||
+                    clip.LeftInset != 0 ||
+                    clip.BottomInset != 0)
+                {
+                    continue;
+                }
+
+                if (clip.Scale != Vector2.One)
+                {
+                    continue;
+                }
+
+                if (clip.CenterPoint != Vector2.Zero)
+                {
+                    continue;
+                }
+
+                if (container.Size != shapeVisual.Size)
+                {
+                    continue;
+                }
+
+                // The container is redundant.
+                var parent = node.Parent;
+                if (parent is ContainerVisual parentContainer)
+                {
+                    // Replace the container with the ShapeVisual.
+                    var indexOfRedundantContainer = parentContainer.Children.IndexOf(container);
+                    parentContainer.Children.RemoveAt(indexOfRedundantContainer);
+                    parentContainer.Children.Insert(indexOfRedundantContainer, shapeVisual);
+
+                    CopyDescriptions(container, shapeVisual);
+                }
+            }
         }
 
         // Where possible, replace properties with a TransformMatrix.
@@ -116,6 +415,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 // If the matrix actually does something, set it.
                 if (!combinedMatrix.IsIdentity)
                 {
+                    var transformDescription = DescribeTransform(scale, rotation, offset);
+                    AppendShortDescription(obj, transformDescription);
+                    AppendLongDescription(obj, transformDescription);
                     obj.TransformMatrix = combinedMatrix;
                 }
             }
@@ -163,6 +465,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 // If the matrix actually does something, set it.
                 if (!combinedMatrix.IsIdentity)
                 {
+                    var transformDescription = DescribeTransform(scale, rotation, offset);
+                    AppendShortDescription(obj, transformDescription);
+                    AppendLongDescription(obj, transformDescription);
                     obj.TransformMatrix = combinedMatrix;
                 }
             }
@@ -353,21 +658,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
         {
             // If a container is not animated and has no properties set, its children can be inserted into its parent.
             var containersWithNoPropertiesSet = graph.CompositionObjectNodes.Where(n =>
-            {
-                // Find the ContainerVisuals that have no properties set.
-                return
-                    n.Object is ContainerVisual container &&
-                    container.CenterPoint == null &&
-                    container.Clip == null &&
-                    container.Offset == null &&
-                    container.Opacity == null &&
-                    container.RotationAngleInDegrees == null &&
-                    container.Scale == null &&
-                    container.Size == null &&
-                    container.TransformMatrix == null &&
-                    container.Animators.Count == 0 &&
-                    container.Properties.Names.Count == 0;
-            }).ToArray();
+
+                    // Find the ContainerVisuals that have no properties set.
+                    n.Object.Type == CompositionObjectType.ContainerVisual &&
+                    GetNonDefaultProperties((ContainerVisual)n.Object) == PropertyId.None
+            ).ToArray();
 
             // Pull the children of the container into the parent of the container. Remove the unnecessary containers.
             foreach (var (Node, Object) in containersWithNoPropertiesSet)
@@ -387,17 +682,15 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 // If childCount is >1, insert into the parent.
                 var index = parent.Children.IndexOf(container);
 
+                var children = container.Children;
+
                 // Get the children from the container.
-                var children = container.Children.ToArray();
-                if (children.Length == 0)
+                if (children.Count == 0)
                 {
                     // The container has no children. This is rare but can happen if
                     // the container is for a layer type that we don't support.
                     continue;
                 }
-
-                // Remove the children from the container.
-                container.Children.Clear();
 
                 // Insert the first child where the container was.
                 var child0 = children[0];
@@ -410,7 +703,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 graph[child0].Parent = parent;
 
                 // Insert the rest of the children.
-                for (var n = 1; n < children.Length; n++)
+                for (var n = 1; n < children.Count; n++)
                 {
                     var childN = children[n];
 
@@ -421,24 +714,247 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     // Fix the parent pointer in the graph.
                     graph[childN].Parent = parent;
                 }
+
+                // Remove the children from the container.
+                children.Clear();
             }
         }
 
+        static PropertyId GetNonDefaultProperties(ContainerVisual obj)
+        {
+            var result = PropertyId.None;
+            if (obj.BorderMode.HasValue)
+            {
+                result |= PropertyId.BorderMode;
+            }
+
+            if (obj.CenterPoint.HasValue)
+            {
+                result |= PropertyId.CenterPoint;
+            }
+
+            if (obj.Clip != null)
+            {
+                result |= PropertyId.Clip;
+            }
+
+            if (obj.Comment != null)
+            {
+                result |= PropertyId.Comment;
+            }
+
+            if (obj.Offset.HasValue)
+            {
+                result |= PropertyId.Offset;
+            }
+
+            if (obj.Opacity.HasValue)
+            {
+                result |= PropertyId.Opacity;
+            }
+
+            if (obj.Properties.Names.Count != 0)
+            {
+                result |= PropertyId.Properties;
+            }
+
+            if (obj.RotationAngleInDegrees.HasValue)
+            {
+                result |= PropertyId.RotationAngleInDegrees;
+            }
+
+            if (obj.RotationAxis.HasValue)
+            {
+                result |= PropertyId.RotationAxis;
+            }
+
+            if (obj.Scale.HasValue)
+            {
+                result |= PropertyId.Scale;
+            }
+
+            if (obj.Size.HasValue)
+            {
+                result |= PropertyId.Size;
+            }
+
+            if (obj.TransformMatrix.HasValue)
+            {
+                result |= PropertyId.TransformMatrix;
+            }
+
+            foreach (var animator in obj.Animators)
+            {
+                result |= PropertyIdFromName(animator.AnimatedProperty);
+            }
+
+            return result;
+        }
+
+        // If a ContainerVisual has exactly one child that is a ContainerVisual, and each
+        // affects different sets of properties then they can be combined into one.
+        static void CoalesceOrthogonalContainerVisuals(ObjectGraph<Node> graph)
+        {
+            // If a container is not animated and has no properties set, its children can be inserted into its parent.
+            var containersWithASingleContainer = graph.CompositionObjectNodes.Where(n =>
+            {
+                // Find the ContainerVisuals that have a single child that is a ContainerVisual.
+                return
+                    n.Object is ContainerVisual container &&
+                    container.Children.Count == 1 &&
+                    container.Children[0].Type == CompositionObjectType.ContainerVisual;
+            }).ToArray();
+
+            foreach (var (_, obj) in containersWithASingleContainer)
+            {
+                var parent = (ContainerVisual)obj;
+                var child = (ContainerVisual)parent.Children[0];
+
+                var parentProperties = GetNonDefaultProperties(parent);
+                var childProperties = GetNonDefaultProperties(child);
+
+                // If the containers have non-overlapping properties they can be coalesced.
+                // If the child has PropertySet values, don't try to coalesce (although we could
+                // move the properties, we're not supporting that case for now.).
+                if ((parentProperties & childProperties) == PropertyId.None &&
+                    (childProperties & PropertyId.Properties) == PropertyId.None)
+                {
+                    // Move the children of the child into the parent, and set the child's
+                    // properties and animations on the parent.
+                    parent.Children.Clear();
+                    foreach (var ch in child.Children)
+                    {
+                        parent.Children.Add(ch);
+                    }
+
+                    // Copy the values of the non-default properties from the child to the parent.
+                    if (child.BorderMode.HasValue)
+                    {
+                        parent.BorderMode = child.BorderMode;
+                    }
+
+                    if (child.CenterPoint.HasValue)
+                    {
+                        parent.CenterPoint = child.CenterPoint;
+                    }
+
+                    if (child.Clip != null)
+                    {
+                        parent.Clip = child.Clip;
+                    }
+
+                    if (child.Comment != null)
+                    {
+                        parent.Comment = child.Comment;
+                    }
+
+                    if (child.Offset.HasValue)
+                    {
+                        parent.Offset = child.Offset;
+                    }
+
+                    if (child.Opacity.HasValue)
+                    {
+                        parent.Opacity = child.Opacity;
+                    }
+
+                    if (child.Properties.Names.Count != 0)
+                    {
+                        // We already checked for this case, so this is unreachable.
+                        throw new InvalidOperationException();
+                    }
+
+                    if (child.RotationAngleInDegrees.HasValue)
+                    {
+                        parent.RotationAngleInDegrees = child.RotationAngleInDegrees;
+                    }
+
+                    if (child.RotationAxis.HasValue)
+                    {
+                        parent.RotationAxis = child.RotationAxis;
+                    }
+
+                    if (child.Scale.HasValue)
+                    {
+                        parent.Scale = child.Scale;
+                    }
+
+                    if (child.Size.HasValue)
+                    {
+                        parent.Size = child.Size;
+                    }
+
+                    if (child.TransformMatrix.HasValue)
+                    {
+                        parent.TransformMatrix = child.TransformMatrix;
+                    }
+
+                    // Start the child's animations on the parent.
+                    foreach (var anim in child.Animators)
+                    {
+                        parent.StartAnimation(anim.AnimatedProperty, anim.Animation);
+                    }
+                }
+            }
+        }
+
+        [Flags]
+        enum PropertyId
+        {
+            None = 0,
+            Unknown = 1,
+            BorderMode = Unknown << 1,
+            CenterPoint = BorderMode << 1,
+            Clip = CenterPoint << 1,
+            Color = Clip << 1,
+            Comment = Color << 1,
+            Offset = Comment << 1,
+            Opacity = Offset << 1,
+            Path = Opacity << 1,
+            Position = Path << 1,
+            Progress = Position << 1,
+            Properties = Progress << 1,
+            RotationAngleInDegrees = Properties << 1,
+            RotationAxis = RotationAngleInDegrees << 1,
+            Scale = RotationAxis << 1,
+            Size = Scale << 1,
+            TransformMatrix = Size << 1,
+            TrimStart = TransformMatrix << 1,
+            TrimEnd = TrimStart << 1,
+        }
+
+        static PropertyId PropertyIdFromName(string value)
+            => value switch
+            {
+                "BorderMode" => PropertyId.BorderMode,
+                "CenterPoint" => PropertyId.CenterPoint,
+                "Clip" => PropertyId.Clip,
+                "Color" => PropertyId.Color,
+                "Comment" => PropertyId.Comment,
+                "Offset" => PropertyId.Offset,
+                "Opacity" => PropertyId.Opacity,
+                "Path" => PropertyId.Path,
+                "Position" => PropertyId.Position,
+                "Progress" => PropertyId.Progress,
+                "RotationAngleInDegrees" => PropertyId.RotationAngleInDegrees,
+                "RotationAxis" => PropertyId.RotationAxis,
+                "Scale" => PropertyId.Scale,
+                "Size" => PropertyId.Size,
+                "TransformMatrix" => PropertyId.TransformMatrix,
+                "TrimStart" => PropertyId.TrimStart,
+                "TrimEnd" => PropertyId.TrimEnd,
+                _ => PropertyId.Unknown,
+            };
+
         static void CopyDescriptions(IDescribable from, IDescribable to)
         {
-            // Append the short description.
+            // Copy the short description. This may lose some information
+            // in the "to" but generally that same information is in the
+            // "from" description anyway.
             var fromShortDescription = from.ShortDescription;
             if (!string.IsNullOrWhiteSpace(fromShortDescription))
             {
-                var toShortDescription = to.ShortDescription;
-                if (string.IsNullOrWhiteSpace(toShortDescription))
-                {
-                    to.ShortDescription = fromShortDescription;
-                }
-                else
-                {
-                    to.ShortDescription = $"{toShortDescription} / {fromShortDescription}";
-                }
+                to.ShortDescription = fromShortDescription;
             }
 
             // Do not try to append the long description - it's impossible to do
@@ -466,6 +982,78 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     to.Name = fromName;
                 }
             }
+        }
+
+        static void AppendShortDescription(IDescribable obj, string description)
+        {
+            obj.ShortDescription = $"{obj.ShortDescription} {description}";
+        }
+
+        static void AppendLongDescription(IDescribable obj, string description)
+        {
+            obj.LongDescription = $"{obj.LongDescription} {description}";
+        }
+
+        static string DescribeTransform(Vector2 scale, double rotationDegrees, Vector2 offset)
+        {
+            var sb = new StringBuilder();
+            if (scale != Vector2.One)
+            {
+                sb.Append($"Scale:{scale.X}");
+            }
+
+            if (rotationDegrees != 0)
+            {
+                if (sb.Length > 0)
+                {
+                    sb.Append(", ");
+                }
+
+                sb.Append($"RotationDegrees:{rotationDegrees}");
+            }
+
+            if (offset != Vector2.Zero)
+            {
+                if (sb.Length > 0)
+                {
+                    sb.Append(", ");
+                }
+
+                sb.Append($"Offset:{offset}");
+            }
+
+            return sb.ToString();
+        }
+
+        static string DescribeTransform(Vector3 scale, double rotationDegrees, Vector3 offset)
+        {
+            var sb = new StringBuilder();
+            if (scale != Vector3.One)
+            {
+                sb.Append($"Scale({scale.X},{scale.Y},{scale.Z})");
+            }
+
+            if (rotationDegrees != 0)
+            {
+                if (sb.Length > 0)
+                {
+                    sb.Append(", ");
+                }
+
+                sb.Append($"RotationDegrees({rotationDegrees})");
+            }
+
+            if (offset != Vector3.Zero)
+            {
+                if (sb.Length > 0)
+                {
+                    sb.Append(", ");
+                }
+
+                sb.Append($"Offset({offset.X},{offset.Y},{offset.Z})");
+            }
+
+            return sb.ToString();
         }
 
         sealed class Node : Graph.Node<Node>
