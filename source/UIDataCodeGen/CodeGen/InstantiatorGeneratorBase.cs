@@ -1601,7 +1601,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             bool GenerateObjectFactory(CodeBuilder builder, CompositionObject obj, ObjectData node)
             {
                 // Uncomment to see the order of creation.
-                //builder.WriteComment($"Traversal order: {node.Position}");
+                builder.WriteComment($"Traversal order: {node.Position}");
                 switch (obj.Type)
                 {
                     case CompositionObjectType.AnimationController:
@@ -1712,11 +1712,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 InitializeCompositionGradientBrush(builder, obj, node);
 
                 WritePropertySetStatement(builder, "StartPoint", obj.StartPoint);
-
-                if (obj.EndPoint.HasValue)
-                {
-                    WritePropertySetStatement(builder, "EndPoint", obj.EndPoint);
-                }
+                WritePropertySetStatement(builder, "EndPoint", obj.EndPoint);
 
                 StartAnimationsOnResult(builder, obj, node);
                 WriteObjectFactoryEnd(builder);
