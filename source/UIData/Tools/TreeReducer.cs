@@ -57,13 +57,17 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
             RemoveTransparentShapes(graph);
             RemoveEmptyContainers(graph);
-            SimplifyProperties(graph);
             CoalesceContainerShapes(graph);
             CoalesceContainerVisuals(graph);
-            RemoveRedundantInsetClipVisuals(graph);
-            PushSharedVisiblityUp(graph);
             CoalesceOrthogonalVisuals(graph);
             CoalesceOrthogonalContainerVisuals(graph);
+
+            // SimplifyProperties should happen after coalescing because
+            // it makes some of the coalescing more difficult by moving
+            // some properties such as offset and scale into a transform matrix.
+            SimplifyProperties(graph);
+            RemoveRedundantInsetClipVisuals(graph);
+            PushSharedVisiblityUp(graph);
 
             return root;
         }

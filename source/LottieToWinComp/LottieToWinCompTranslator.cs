@@ -880,23 +880,22 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
 #if !NoInvisibility
 #if ControllersSynchronizationWorkaround
-                // Animate between Matrix3x2(0,0,0,1,0,0) and Matrix3x2(1,0,0,1,0,0) (i.e. between Scale(0,1) and identity).
-                // Note that this could be equivalently achieved through a Scale animation.
-                var visibilityAnimation = _c.CreateScalarKeyFrameAnimation();
+                // Animate between Scale(0,0) and Scale(1,1).
+                var visibilityAnimation = _c.CreateVector2KeyFrameAnimation();
                 if (inProgress > 0)
                 {
                     // Set initial value to be non-visible (default is visible).
-                    visibilityNode.TransformMatrix = new Sn.Matrix3x2(m11: 0, m12: 0, m21: 0, m22: 1, m31: 0, m32: 0);
-                    visibilityAnimation.InsertKeyFrame(inProgress, 1, _c.CreateHoldThenStepEasingFunction());
+                    visibilityNode.Scale = Sn.Vector2.Zero;
+                    visibilityAnimation.InsertKeyFrame(inProgress, Sn.Vector2.One, _c.CreateHoldThenStepEasingFunction());
                 }
 
                 if (outProgress < 1)
                 {
-                    visibilityAnimation.InsertKeyFrame(outProgress, 0, _c.CreateHoldThenStepEasingFunction());
+                    visibilityAnimation.InsertKeyFrame(outProgress, Sn.Vector2.Zero, _c.CreateHoldThenStepEasingFunction());
                 }
 
                 visibilityAnimation.Duration = _lc.Duration;
-                StartKeyframeAnimation(visibilityNode, "TransformMatrix._11", visibilityAnimation);
+                StartKeyframeAnimation(visibilityNode, nameof(visibilityNode.Scale), visibilityAnimation);
 #else
                 var visibilityExpression =
                     ExpressionFactory.CreateProgressExpression(
