@@ -58,13 +58,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             RemoveTransparentShapes(graph);
             RemoveEmptyContainers(graph);
             CoalesceContainerShapes(graph);
+            CoalesceContainerShapes2(graph);
             CoalesceContainerVisuals(graph);
             CoalesceOrthogonalVisuals(graph);
             CoalesceOrthogonalContainerVisuals(graph);
-
-            // SimplifyProperties should happen after coalescing because
-            // it makes some of the coalescing more difficult by moving
-            // some properties such as offset and scale into a transform matrix.
             SimplifyProperties(graph);
             RemoveRedundantInsetClipVisuals(graph);
             PushSharedVisiblityUp(graph);
@@ -605,56 +602,105 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 return true;
             }).ToArray();
 
-            foreach (var (Node, Object) in containersWithNoPropertiesSet)
+            foreach (var (_, Object) in containersWithNoPropertiesSet)
             {
                 var container = (CompositionContainerShape)Object;
+                ElideContainerShape(graph, container);
+            }
+        }
 
-                // Insert the children into the parent.
-                var parent = (IContainShapes)Node.Parent;
-                if (parent == null)
-                {
-                    // The container may have already been removed, or it might be a root.
-                    continue;
-                }
+        static void ElideContainerShape(ObjectGraph<Node> graph, CompositionContainerShape container)
+        {
+            // Insert the children into the parent.
+            var parent = (IContainShapes)graph[container].Parent;
+            if (parent == null)
+            {
+                // The container may have already been removed, or it might be a root.
+                return;
+            }
 
-                // Find the index in the parent of the container.
-                // If childCount is 1, just replace the the container in the parent.
-                // If childCount is >1, insert into the parent.
-                var index = parent.Shapes.IndexOf(container);
+            // Find the index in the parent of the container.
+            // If childCount is 1, just replace the the container in the parent.
+            // If childCount is >1, insert into the parent.
+            var index = parent.Shapes.IndexOf(container);
 
-                // Get the children from the container.
-                var children = container.Shapes.ToArray();
-                if (children.Length == 0)
-                {
-                    // The container has no children. This is rare but can happen if
-                    // the container is for a layer type that we don't support.
-                    continue;
-                }
+            // Get the children from the container.
+            var children = container.Shapes.ToArray();
+            if (children.Length == 0)
+            {
+                // The container has no children. This is rare but can happen if
+                // the container is for a layer type that we don't support.
+                return;
+            }
 
-                // Remove the children from the container.
-                container.Shapes.Clear();
+            // Remove the children from the container.
+            container.Shapes.Clear();
 
-                // Insert the first child where the container was.
-                var child0 = children[0];
+            // Insert the first child where the container was.
+            var child0 = children[0];
 
-                CopyDescriptions(container, child0);
+            CopyDescriptions(container, child0);
 
-                parent.Shapes[index] = child0;
+            parent.Shapes[index] = child0;
+
+            // Fix the parent pointer in the graph.
+            graph[child0].Parent = (CompositionObject)parent;
+
+            // Insert the rest of the children.
+            for (var n = 1; n < children.Length; n++)
+            {
+                var childN = children[n];
+
+                CopyDescriptions(container, childN);
+
+                parent.Shapes.Insert(index + n, childN);
 
                 // Fix the parent pointer in the graph.
-                graph[child0].Parent = (CompositionObject)parent;
+                graph[childN].Parent = (CompositionObject)parent;
+            }
+        }
 
-                // Insert the rest of the children.
-                for (var n = 1; n < children.Length; n++)
+        // Find ContainerShapes that do not have a Transform set, with a single child that has
+        // only its Transform set and pulls the child into the parent. This is OK to do
+        // because the Transform will still be evaluated as if it is lower in the tree.
+        static void CoalesceContainerShapes2(ObjectGraph<Node> graph)
+        {
+            var containerShapes = graph.CompositionObjectNodes.Where(n =>
+                n.Object.Type == CompositionObjectType.CompositionContainerShape &&
+                n.Object is CompositionContainerShape container &&
+                container.Shapes.Count == 1 &&
+                container.Shapes[0].Type == CompositionObjectType.CompositionContainerShape
+                ).ToArray();
+
+            foreach (var (node, obj) in containerShapes)
+            {
+                var parent = (CompositionContainerShape)obj;
+
+                if (!parent.Shapes.Any())
                 {
-                    var childN = children[n];
+                    // The children have already been removed.
+                    continue;
+                }
 
-                    CopyDescriptions(container, childN);
+                var child = (CompositionContainerShape)parent.Shapes[0];
 
-                    parent.Shapes.Insert(index + n, childN);
+                var parentProperties = GetNonDefaultProperties(parent);
+                var childProperties = GetNonDefaultProperties(child);
 
-                    // Fix the parent pointer in the graph.
-                    graph[childN].Parent = (CompositionObject)parent;
+                if (childProperties == PropertyId.TransformMatrix &&
+                    (parentProperties & PropertyId.TransformMatrix) == PropertyId.None)
+                {
+                    if (child.Animators.Any())
+                    {
+                        // Ignore if the child is animated. We could handle it but it's more complicated.
+                        continue;
+                    }
+
+                    // Copy the Transform from the child into the parent and move child's children into the parent.
+                    parent.TransformMatrix = child.TransformMatrix;
+
+                    // Move the child'd children into the parent.
+                    ElideContainerShape(graph, child);
                 }
             }
         }
@@ -723,6 +769,52 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 // Remove the children from the container.
                 children.Clear();
             }
+        }
+
+        static PropertyId GetNonDefaultProperties(CompositionContainerShape obj)
+        {
+            var result = PropertyId.None;
+            if (obj.CenterPoint.HasValue)
+            {
+                result |= PropertyId.CenterPoint;
+            }
+
+            if (obj.Comment != null)
+            {
+                result |= PropertyId.Comment;
+            }
+
+            if (obj.Offset.HasValue)
+            {
+                result |= PropertyId.Offset;
+            }
+
+            if (obj.Properties.Names.Count != 0)
+            {
+                result |= PropertyId.Properties;
+            }
+
+            if (obj.RotationAngleInDegrees.HasValue)
+            {
+                result |= PropertyId.RotationAngleInDegrees;
+            }
+
+            if (obj.Scale.HasValue)
+            {
+                result |= PropertyId.Scale;
+            }
+
+            if (obj.TransformMatrix.HasValue)
+            {
+                result |= PropertyId.TransformMatrix;
+            }
+
+            foreach (var animator in obj.Animators)
+            {
+                result |= PropertyIdFromName(animator.AnimatedProperty);
+            }
+
+            return result;
         }
 
         static PropertyId GetNonDefaultProperties(ContainerVisual obj)

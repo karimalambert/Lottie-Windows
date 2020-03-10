@@ -1510,6 +1510,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 builder.WriteSubBuilder("CreateVector2KeyFrameAnimation");
                 builder.WriteSubBuilder("CreateVector3KeyFrameAnimation");
                 builder.WriteSubBuilder("CreateVector4KeyFrameAnimation");
+                builder.WriteSubBuilder("CreateSpriteShape");
 
                 // Write factory methods for each node.
                 foreach (var node in _nodes)
@@ -1992,6 +1993,21 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     }
 
                     b.WriteLine($"result{Deref}InsertKeyFrame(initialProgress, initialValue, initialEasingFunction);");
+                    b.WriteLine("return result;");
+                    b.CloseScope();
+                    b.WriteLine();
+                }
+            }
+
+            void EnsureSpriteShapeHelperWritten(CodeBuilder builder)
+            {
+                var b = builder.GetSubBuilder("CreateSpriteShape");
+                if (b.IsEmpty)
+                {
+                    b.WriteLine($"CompositionSpriteShape CreateSpriteShape(CompositionGeometry geometry, Matrix3x2 transformMatrix)");
+                    b.OpenScope();
+                    b.WriteLine($"{ConstVar} result = _c{Deref}CreateSpriteShape(geometry);");
+                    WritePropertySetStatement(b, "TransformMatrix", "transformMatrix");
                     b.WriteLine("return result;");
                     b.CloseScope();
                     b.WriteLine();
@@ -2769,13 +2785,28 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 if (obj.Geometry is null)
                 {
                     WriteCreateAssignment(builder, node, $"_c{Deref}CreateSpriteShape()");
+                    InitializeCompositionShape(builder, obj, node);
                 }
                 else
                 {
-                    WriteCreateAssignment(builder, node, $"_c{Deref}CreateSpriteShape({CallFactoryFromFor(node, obj.Geometry)})");
+                    if (obj.TransformMatrix.HasValue)
+                    {
+                        // Use the helper.
+                        EnsureSpriteShapeHelperWritten(builder);
+                        WriteMatrixComment(builder, obj.TransformMatrix.Value);
+                        builder.WriteLine($"{ConstVar} result = CreateSpriteShape({CallFactoryFromFor(node, obj.Geometry)}, {Matrix3x2(obj.TransformMatrix.Value)});");
+                        InitializeCompositionObject(builder, obj, node);
+                        WritePropertySetStatement(builder, "CenterPoint", obj.CenterPoint);
+                        WritePropertySetStatement(builder, "Offset", obj.Offset);
+                        WritePropertySetStatement(builder, "RotationAngleInDegrees", obj.RotationAngleInDegrees);
+                        WritePropertySetStatement(builder, "Scale", obj.Scale);
+                    }
+                    else
+                    {
+                        WriteCreateAssignment(builder, node, $"_c{Deref}CreateSpriteShape({CallFactoryFromFor(node, obj.Geometry)})");
+                        InitializeCompositionShape(builder, obj, node);
+                    }
                 }
-
-                InitializeCompositionShape(builder, obj, node);
 
                 if (obj.FillBrush != null)
                 {
