@@ -467,7 +467,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     builder.WriteLine();
                 }
 
-                animatedVisualGenerator.WriteAnimatedVisualCode(builder);
+                var animatedVisualBuilder = new CodeBuilder();
+                animatedVisualGenerator.WriteAnimatedVisualCode(animatedVisualBuilder);
+                builder.WriteCodeBuilder(animatedVisualBuilder);
+
                 firstAnimatedVisualWritten = true;
             }
 
@@ -1601,7 +1604,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             bool GenerateObjectFactory(CodeBuilder builder, CompositionObject obj, ObjectData node)
             {
                 // Uncomment to see the order of creation.
-                builder.WriteComment($"Traversal order: {node.Position}");
+                //builder.WriteComment($"Traversal order: {node.Position}");
                 switch (obj.Type)
                 {
                     case CompositionObjectType.AnimationController:
@@ -1968,7 +1971,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 var b = builder.GetSubBuilder(methodName);
                 if (b.IsEmpty)
                 {
-                    b.WriteLine($"void {methodName}()");
+                    b.WriteLine($"{animationType} {methodName}()");
                     b.OpenScope();
                     b.WriteLine($"{ConstVar} result = _c{Deref}{methodName}();");
                     WritePropertySetStatement(b, "Duration", TimeSpan(_owner._compositionDuration));

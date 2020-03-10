@@ -62,6 +62,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             CoalesceContainerVisuals(graph);
             RemoveRedundantInsetClipVisuals(graph);
             PushSharedVisiblityUp(graph);
+            CoalesceOrthogonalVisuals(graph);
             CoalesceOrthogonalContainerVisuals(graph);
 
             return root;
@@ -816,7 +817,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 // If the containers have non-overlapping properties they can be coalesced.
                 // If the child has PropertySet values, don't try to coalesce (although we could
                 // move the properties, we're not supporting that case for now.).
-                if ((parentProperties & childProperties) == PropertyId.None &&
+                if (ArePropertiesOrthogonal(parentProperties, childProperties) &&
                     (childProperties & PropertyId.Properties) == PropertyId.None)
                 {
                     // Move the children of the child into the parent, and set the child's
@@ -828,71 +829,104 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     }
 
                     // Copy the values of the non-default properties from the child to the parent.
-                    if (child.BorderMode.HasValue)
+                    TransferContainerVisualProperties(child, parent);
+                }
+            }
+        }
+
+        static bool ArePropertiesOrthogonal(PropertyId parent, PropertyId child)
+        {
+            if ((parent & child) != PropertyId.None)
+            {
+                // The properties overlap.
+                return false;
+            }
+
+            // The properties do not overlap, but we have to check for TransformMatrix
+            // on the parent with Offset, Rotate, or Scale in the child because the
+            // ordering is significant (TransformMatrix is evaluated after Translate,
+            // Rotate, and Scale).
+            if (parent.HasFlag(PropertyId.TransformMatrix) &&
+                (child & (PropertyId.Offset | PropertyId.RotationAngleInDegrees | PropertyId.Scale)) != PropertyId.None)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        // If a ContainerVisual has exactly one child that is a SpriteVisual, and each
+        // affects different sets of properties then properties from the container can be
+        // copied into the SpriteVisual and the container can be removed.
+        static void CoalesceOrthogonalVisuals(ObjectGraph<Node> graph)
+        {
+            // If a container is not animated and has no properties set, its children can be inserted into its parent.
+            var containersWithASingleSprite = graph.CompositionObjectNodes.Where(n =>
+            {
+                // Find the ContainerVisuals that have a single child that is a ContainerVisual.
+                return
+                    n.Object is ContainerVisual container &&
+                    n.Node.Parent is ContainerVisual &&
+                    container.Children.Count == 1 &&
+                    container.Children[0].Type == CompositionObjectType.SpriteVisual;
+            }).ToArray();
+
+            foreach (var (node, obj) in containersWithASingleSprite)
+            {
+                var parent = (ContainerVisual)obj;
+                var child = (ContainerVisual)parent.Children[0];
+
+                var parentProperties = GetNonDefaultProperties(parent);
+                var childProperties = GetNonDefaultProperties(child);
+
+                // If the containers have non-overlapping properties they can be coalesced.
+                // If the parent has PropertySet values, don't try to coalesce (although we could
+                // move the properties, we're not supporting that case for now.).
+                if (ArePropertiesOrthogonal(parentProperties, childProperties) &&
+                    (parentProperties & PropertyId.Properties) == PropertyId.None)
+                {
+                    // Move the child into the parent of the parent.
+                    var grandParent = (ContainerVisual)node.Parent;
+
+                    var indexInGrandParent = grandParent.Children.IndexOf(parent);
+                    grandParent.Children.RemoveAt(indexInGrandParent);
+                    grandParent.Children.Insert(indexInGrandParent, child);
+
+                    // Copy the values of the non-default properties from the parent to the child.
+                    TransferContainerVisualProperties(parent, child);
+                }
+            }
+        }
+
+        static void TransferContainerVisualProperties(ContainerVisual from, ContainerVisual to)
+        {
+            to.BorderMode = from.BorderMode;
+            to.CenterPoint = from.CenterPoint;
+            to.Clip = from.Clip;
+            to.Comment = from.Comment;
+            to.Offset = from.Offset;
+            to.Opacity = from.Opacity;
+            to.RotationAngleInDegrees = from.RotationAngleInDegrees;
+            to.RotationAxis = from.RotationAxis;
+            to.Scale = from.Scale;
+            to.Size = from.Size;
+            to.TransformMatrix = from.TransformMatrix;
+
+            // Start the from's animations on the to.
+            foreach (var anim in from.Animators)
+            {
+                to.StartAnimation(anim.AnimatedProperty, anim.Animation);
+                if (anim.Controller.IsPaused || anim.Controller.Animators.Count > 0)
+                {
+                    var controller = to.TryGetAnimationController(anim.AnimatedProperty);
+                    if (anim.Controller.IsPaused)
                     {
-                        parent.BorderMode = child.BorderMode;
+                        controller.Pause();
                     }
 
-                    if (child.CenterPoint.HasValue)
+                    foreach (var controllerAnim in anim.Controller.Animators)
                     {
-                        parent.CenterPoint = child.CenterPoint;
-                    }
-
-                    if (child.Clip != null)
-                    {
-                        parent.Clip = child.Clip;
-                    }
-
-                    if (child.Comment != null)
-                    {
-                        parent.Comment = child.Comment;
-                    }
-
-                    if (child.Offset.HasValue)
-                    {
-                        parent.Offset = child.Offset;
-                    }
-
-                    if (child.Opacity.HasValue)
-                    {
-                        parent.Opacity = child.Opacity;
-                    }
-
-                    if (child.Properties.Names.Count != 0)
-                    {
-                        // We already checked for this case, so this is unreachable.
-                        throw new InvalidOperationException();
-                    }
-
-                    if (child.RotationAngleInDegrees.HasValue)
-                    {
-                        parent.RotationAngleInDegrees = child.RotationAngleInDegrees;
-                    }
-
-                    if (child.RotationAxis.HasValue)
-                    {
-                        parent.RotationAxis = child.RotationAxis;
-                    }
-
-                    if (child.Scale.HasValue)
-                    {
-                        parent.Scale = child.Scale;
-                    }
-
-                    if (child.Size.HasValue)
-                    {
-                        parent.Size = child.Size;
-                    }
-
-                    if (child.TransformMatrix.HasValue)
-                    {
-                        parent.TransformMatrix = child.TransformMatrix;
-                    }
-
-                    // Start the child's animations on the parent.
-                    foreach (var anim in child.Animators)
-                    {
-                        parent.StartAnimation(anim.AnimatedProperty, anim.Animation);
+                        controller.StartAnimation(controllerAnim.AnimatedProperty, controllerAnim.Animation);
                     }
                 }
             }

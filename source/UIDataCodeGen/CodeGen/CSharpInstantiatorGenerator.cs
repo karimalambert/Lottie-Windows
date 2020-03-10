@@ -32,8 +32,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                   stringifier: stringifier)
         {
             _s = stringifier;
-            _interface = _s.Namespace(AnimatedVisualSourceInfo.Interface ?? "Microsoft.UI.Xaml.IAnimatedVisual");
-            _sourceInterface = _sourceInterface + "Source";
+            _interface = _s.Namespace(AnimatedVisualSourceInfo.Interface ?? "Microsoft.UI.Xaml.Controls.IAnimatedVisual");
+            _sourceInterface = _interface + "Source";
         }
 
         IAnimatedVisualSourceInfo Info => AnimatedVisualSourceInfo;
