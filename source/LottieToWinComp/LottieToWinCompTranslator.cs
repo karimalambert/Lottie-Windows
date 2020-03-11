@@ -7,11 +7,10 @@
 #define SimpleTrimPathCombining
 #define SpatialBeziers
 
-// The AnimationController.Progress value is used one frame later than expressions,
+// NOTE: The AnimationController.Progress value is used one frame later than expressions,
 // so to keep everything in sync if one animation is using a controller tied
 // to the uber Progress property, then no animation can be tied to the Progress
-// property without going through a controller. Enable this to prevent flashes.
-#define ControllersSynchronizationWorkaround
+// property without going through a controller.
 
 //#define LinearEasingOnSpatialBeziers
 // Use Win2D to create paths from geometry combines when merging shape layers.
@@ -21,10 +20,6 @@
 //#define NoClipping
 // For diagnosing issues, give nothing scale.
 //#define NoScaling
-// For diagnosing issues, do not control visibility.
-//#define NoInvisibility
-// For diagnosing issues, do not inherit transforms.
-//#define NoTransformInheritance
 #endif
 using System;
 using System.Collections.Generic;
@@ -802,6 +797,94 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             }
         }
 
+        // Returns a chain with a Visual at the top and a CompositionContainerShape at the bottom.
+        // The nodes in between implement the transforms for the layer.
+        // This chain is used when a Shape tree needs to be expressed as a Visual tree. We take
+        // advantage of this case to do layer opacity and visibility using Visual nodes rather
+        // than pushing the opacity to the leaves and using Scale animations to do visibility.
+        bool TryCreateShapeVisualTransformChain(
+            TranslationContext context,
+            out ContainerVisual rootNode,
+            out CompositionContainerShape contentsNode)
+        {
+            // Create containers for the contents in the layer.
+            // The rootNode is the root for the layer.
+            //
+            //     +---------------+
+            //     |   rootNode    |-- Root node, optionally with opacity animation for the layer.
+            //     +---------------+
+            //            ^
+            //            |
+            //     +-----------------+
+            //     |  visiblityNode  |-- Optional visiblity node (only used if the visiblity is animated).
+            //     +-----------------+
+            //            ^
+            //            |
+            //     +-----------------+
+            //     |  opacityNode    |-- Optional opacity node.
+            //     +-----------------+
+            //            ^
+            //            |
+            //     +-----------------+
+            //     |   ShapeVisual   |-- Start of the Shape tree.
+            //     +-----------------+
+            //            ^
+            //            |
+            //     +-------------------+
+            //     | rootTransformNode |--Transform without opacity (inherited from root ancestor of the transform tree).
+            //     +-------------------+
+            //            ^
+            //            |
+            //     + - - - - - - - - - - - - +
+            //     | other transforms nodes  |--Transform without opacity (inherited from the transform tree)
+            //     + - - - - - - - - - - - - +
+            //            ^
+            //            |
+            //     +-------------------+
+            //     | leafTransformNode |--Transform without opacity defined on the layer.
+            //     +-------------------+
+            //        ^        ^
+            //        |        |
+            // +---------+ +---------+
+            // | content | | content | ...
+            // +---------+ +---------+
+            //
+
+            // Get the opacity of the layer.
+            var layerOpacity = context.TrimAnimatable(context.Layer.Transform.Opacity);
+
+            // Convert the layer's in point and out point into absolute progress (0..1) values.
+            var inProgress = GetInPointProgress(context);
+            var outProgress = GetOutPointProgress(context);
+
+            if (inProgress > 1 || outProgress <= 0 || inProgress >= outProgress || layerOpacity.AlwaysEquals(LottieData.Opacity.Transparent))
+            {
+                // The layer is never visible. Don't create anything.
+                rootNode = null;
+                contentsNode = null;
+                return false;
+            }
+
+            rootNode = _c.CreateContainerVisual();
+            ContainerVisual contentsVisual = rootNode;
+
+            // Implement opacity for the layer.
+            InsertOpacityVisualIntoTransformChain(context, layerOpacity, ref rootNode);
+
+            // Implement visibility for the layer.
+            InsertVisibilityVisualIntoTransformChain(context, inProgress, outProgress, ref rootNode);
+
+            // Create the transforms chain.
+            TranslateTransformOnContainerShapeForLayer(context, context.Layer, out var transformsRoot, out contentsNode);
+
+            // Create the shape visual.
+            var shapeVisual = _c.CreateShapeVisualWithChild(transformsRoot, context.Size);
+
+            contentsVisual.Children.Add(shapeVisual);
+
+            return true;
+        }
+
         // Returns a chain of ContainerShape that define the transforms for a layer.
         // The top of the chain is the rootTransform, the bottom is the contentsNode.
         bool TryCreateContainerShapeTransformChain(
@@ -843,10 +926,14 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             // +---------+ +---------+
             //
 
+            // Get the opacity of the layer.
+            var layerOpacity = context.TrimAnimatable(context.Layer.Transform.Opacity);
+
             // Convert the layer's in point and out point into absolute progress (0..1) values.
             var inProgress = GetInPointProgress(context);
             var outProgress = GetOutPointProgress(context);
-            if (inProgress > 1 || outProgress <= 0 || inProgress >= outProgress)
+
+            if (inProgress > 1 || outProgress <= 0 || inProgress >= outProgress || layerOpacity.AlwaysEquals(LottieData.Opacity.Transparent))
             {
                 // The layer is never visible. Don't create anything.
                 rootNode = null;
@@ -866,8 +953,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                 visibilityNode.Shapes.Add(transformsRoot);
                 rootNode = visibilityNode;
 
-#if !NoInvisibility
-#if ControllersSynchronizationWorkaround
                 // Animate between Scale(0,0) and Scale(1,1).
                 var visibilityAnimation = _c.CreateVector2KeyFrameAnimation();
                 if (inProgress > 0)
@@ -884,20 +969,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
                 visibilityAnimation.Duration = _lc.Duration;
                 StartKeyframeAnimation(visibilityNode, nameof(visibilityNode.Scale), visibilityAnimation);
-#else
-                var visibilityExpression =
-                    ExpressionFactory.CreateProgressExpression(
-                        ExpressionFactory.RootProgress,
-                        new ExpressionFactory.Segment(double.MinValue, inProgress, Expr.Matrix3x2Zero),
-                        new ExpressionFactory.Segment(inProgress, outProgress, Expr.Matrix3x2Identity),
-                        new ExpressionFactory.Segment(outProgress, double.MaxValue, Expr.Matrix3x2Zero)
-                        );
-
-                var visibilityAnimation = _c.CreateExpressionAnimation(visibilityExpression);
-                visibilityAnimation.SetReferenceParameter(RootName, _rootVisual);
-                StartExpressionAnimation(visibilityNode, "TransformMatrix", visibilityAnimation);
-#endif // ControllersSynchronizationWorkaround
-#endif // !NoInvisibility
             }
             else
             {
@@ -968,29 +1039,20 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             TranslateTransformOnContainerVisualForLayer(context, context.Layer, out rootNode, out contentsNode);
 
             // Implement opacity for the layer.
-            if (layerOpacity.IsAnimated || layerOpacity.InitialValue < LottieData.Opacity.Opaque)
-            {
-                // Insert a new node to control opacity at the top of the chain.
-                var opacityNode = _c.CreateContainerVisual();
+            InsertOpacityVisualIntoTransformChain(context, layerOpacity, ref rootNode);
 
-                if (_addDescriptions)
-                {
-                    Describe(opacityNode, $"Opacity for layer: {context.Layer.Name}");
-                }
+            // Implement visibility for the layer.
+            InsertVisibilityVisualIntoTransformChain(context, inProgress, outProgress, ref rootNode);
 
-                opacityNode.Children.Add(rootNode);
-                rootNode = opacityNode;
+            return true;
+        }
 
-                if (layerOpacity.IsAnimated)
-                {
-                    ApplyOpacityKeyFrameAnimation(context, layerOpacity, opacityNode, "Opacity", "Layer opacity animation");
-                }
-                else
-                {
-                    opacityNode.Opacity = Opacity(layerOpacity.InitialValue);
-                }
-            }
-
+        void InsertVisibilityVisualIntoTransformChain(
+            TranslationContext context,
+            float inProgress,
+            float outProgress,
+            ref ContainerVisual root)
+        {
             // Implement the Visibility for the layer. Only needed if the layer becomes visible after
             // the LottieComposition's in point, or it becomes invisible before the LottieComposition's out point.
             if (inProgress > 0 || outProgress < 1)
@@ -1003,11 +1065,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                     Describe(visibilityNode, $"Visibility for layer: {context.Layer.Name}");
                 }
 
-                visibilityNode.Children.Add(rootNode);
-                rootNode = visibilityNode;
+                visibilityNode.Children.Add(root);
+                root = visibilityNode;
 
-#if !NoInvisibility
-#if ControllersSynchronizationWorkaround
                 // Animate opacity between 0 and 1.
                 var visibilityAnimation = _c.CreateScalarKeyFrameAnimation();
                 if (inProgress > 0)
@@ -1024,26 +1084,37 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
                 visibilityAnimation.Duration = _lc.Duration;
                 StartKeyframeAnimation(visibilityNode, "Opacity", visibilityAnimation);
-#else
-                var invisible = Expr.Scalar(0);
-                var visible = Expr.Scalar(1);
-
-                var visibilityExpression =
-                    ExpressionFactory.CreateProgressExpression(
-                        ExpressionFactory.RootProgress,
-                        new ExpressionFactory.Segment(double.MinValue, inProgress, invisible),
-                        new ExpressionFactory.Segment(inProgress, outProgress, visible),
-                        new ExpressionFactory.Segment(outProgress, double.MaxValue, invisible)
-                        );
-
-                var visibilityAnimation = _c.CreateExpressionAnimation(visibilityExpression);
-                visibilityAnimation.SetReferenceParameter(RootName, _rootVisual);
-                StartExpressionAnimation(visibilityNode, "Opacity", visibilityAnimation);
-#endif // ControllersSynchronizationWorkaround
-#endif // !NoInvisibility
             }
+        }
 
-            return true;
+        void InsertOpacityVisualIntoTransformChain(
+            TranslationContext context,
+            in TrimmedAnimatable<Opacity> opacity,
+            ref ContainerVisual root)
+        {
+            // Implement opacity for the layer.
+            if (opacity.IsAnimated || opacity.InitialValue < LottieData.Opacity.Opaque)
+            {
+                // Insert a new node to control opacity at the top of the chain.
+                var opacityNode = _c.CreateContainerVisual();
+
+                if (_addDescriptions)
+                {
+                    Describe(opacityNode, $"Opacity for layer: {context.Layer.Name}");
+                }
+
+                opacityNode.Children.Add(root);
+                root = opacityNode;
+
+                if (opacity.IsAnimated)
+                {
+                    ApplyOpacityKeyFrameAnimation(context, opacity, opacityNode, "Opacity", "Layer opacity animation");
+                }
+                else
+                {
+                    opacityNode.Opacity = Opacity(opacity.InitialValue);
+                }
+            }
         }
 
         CompositionSubGraph TranslateImageLayer(TranslationContext.For<ImageLayer> context)
@@ -1469,44 +1540,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             }
         }
 
-        // Helper for shape trees that need a mask applied.
-        // This function creates a ShapeVisual to house the
-        // shapes that we need to mask. It returns a visual
-        // which is the final composed masked result.
-        Visual TranslateAndApplyMasksOnShapeTree(
-            TranslationContext context,
-            CompositionContainerShape containerShapeToMask)
-        {
-            var contentShapeVisual = _c.CreateShapeVisualWithChild(containerShapeToMask, context.Size);
-            return TranslateAndApplyMasksForLayer(context, contentShapeVisual);
-        }
-
         // May return null if the layer does not produce any renderable content.
         CompositionSubGraph TranslateShapeLayer(TranslationContext.For<ShapeLayer> context)
         {
-            /*return new CompositionSubGraph.FromShapeLayer(this, context);*/
-            bool layerHasMasks = false;
-
-#if !NoClipping
-            layerHasMasks = context.Layer.Masks.Any();
-#endif
-
-            CompositionContainerShape containerShapeRootNode = null;
-            CompositionContainerShape containerShapeContentNode = null;
-
-            if (!TryCreateContainerShapeTransformChain(context, out containerShapeRootNode, out containerShapeContentNode))
-            {
-                // The layer is never visible.
-                return null;
-            }
-
-            var shapeContext = new ShapeContentContext(this);
-            shapeContext.UpdateOpacityFromTransform(context, context.Layer.Transform);
-            containerShapeContentNode.Shapes.Add(TranslateShapeLayerContents(context, shapeContext, context.Layer.Contents));
-
-            return layerHasMasks
-                ? new CompositionSubGraph.FromVisual(this, TranslateAndApplyMasksOnShapeTree(context, containerShapeRootNode))
-                : (CompositionSubGraph)new CompositionSubGraph.FromShape(this, containerShapeRootNode);
+            return new CompositionSubGraph.FromShapeLayer(this, context);
         }
 
         CompositionShape TranslateGroupShapeContent(TranslationContext.For<ShapeLayer> context, ShapeContentContext shapeContext, ShapeGroup group)
@@ -3281,6 +3318,37 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             return null;
         }
 
+        // Returns a chain of ContainerVisual that define the opacity for a layer.
+        // The top of the chain is the rootTransform, the bottom is the leafTransform.
+        void TranslateOpacityTransformOnContainerVisualForLayer(
+            TranslationContext context,
+            Layer layer,
+            out ContainerVisual rootTransformNode,
+            out ContainerVisual leafTransformNode)
+        {
+            // Create a ContainerVisual to apply the transform to.
+            leafTransformNode = _c.CreateContainerVisual();
+
+            // Apply the transform.
+            TranslateAndApplyTransform(context, layer.Transform, leafTransformNode);
+            if (_addDescriptions)
+            {
+                Describe(leafTransformNode, $"Transforms for {layer.Name}");
+            }
+
+            // Translate the parent transform, if any.
+            if (layer.Parent != null)
+            {
+                var parentLayer = context.Layers.GetLayerById(layer.Parent.Value);
+                TranslateTransformOnContainerVisualForLayer(context, parentLayer, out rootTransformNode, out var parentLeafTransform);
+                parentLeafTransform.Children.Add(leafTransformNode);
+            }
+            else
+            {
+                rootTransformNode = leafTransformNode;
+            }
+        }
+
         // Returns a chain of ContainerVisual that define the transform for a layer.
         // The top of the chain is the rootTransform, the bottom is the leafTransform.
         void TranslateTransformOnContainerVisualForLayer(
@@ -3299,9 +3367,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                 Describe(leafTransformNode, $"Transforms for {layer.Name}");
             }
 
-#if NoTransformInheritance
-            rootTransformNode = leafTransformNode;
-#else
             // Translate the parent transform, if any.
             if (layer.Parent != null)
             {
@@ -3313,7 +3378,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             {
                 rootTransformNode = leafTransformNode;
             }
-#endif
         }
 
         // Returns a chain of CompositionContainerShape that define the transform for a layer.
@@ -3330,10 +3394,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             // Apply the transform from the layer.
             TranslateAndApplyTransform(context, layer.Transform, leafTransformNode);
 
-#if NoTransformInheritance
-            rootTransformNode = leafTransformNode;
-#else
-            // Translate the parent transform, if any.
+            // Recurse to translate the parent transform, if any.
             if (layer.Parent != null)
             {
                 var parentLayer = context.Layers.GetLayerById(layer.Parent.Value);
@@ -3349,7 +3410,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             {
                 rootTransformNode = leafTransformNode;
             }
-#endif
         }
 
         void TranslateAndApplyTransform(
@@ -4846,6 +4906,15 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
                 internal override CompositionShape GetShapeRoot()
                 {
+                    bool layerHasMasks = false;
+#if !NoClipping
+                    layerHasMasks = _context.Layer.Masks.Any();
+#endif
+                    if (layerHasMasks)
+                    {
+                        throw new InvalidOperationException();
+                    }
+
                     if (!_owner.TryCreateContainerShapeTransformChain(_context, out var rootNode, out var contentsNode))
                     {
                         // The layer is never visible.
@@ -4853,6 +4922,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                     }
 
                     var shapeContext = new ShapeContentContext(_owner);
+
+                    // Update the opacity from the transform. This is necessary to push the opacity
+                    // to the leafs (because CompositionShape does not support opacity).
                     shapeContext.UpdateOpacityFromTransform(_context, _context.Layer.Transform);
                     contentsNode.Shapes.Add(_owner.TranslateShapeLayerContents(_context, shapeContext, _context.Layer.Contents));
 
@@ -4865,17 +4937,16 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 #if !NoClipping
                     layerHasMasks = _context.Layer.Masks.Any();
 #endif
-                    if (!_owner.TryCreateContainerVisualTransformChain(_context, out var rootNode, out var contentsNode))
+
+                    if (!_owner.TryCreateShapeVisualTransformChain(_context, out var rootNode, out var contentsNode))
                     {
                         // The layer is never visible.
                         return null;
                     }
 
                     var shapeContext = new ShapeContentContext(_owner);
-                    shapeContext.UpdateOpacityFromTransform(_context, _context.Layer.Transform);
-                    var shapeTree = _owner.TranslateShapeLayerContents(_context, shapeContext, _context.Layer.Contents);
-                    var shapeVisual = _owner._c.CreateShapeVisualWithChild(shapeTree, maximumSize);
-                    contentsNode.Children.Add(shapeVisual);
+
+                    contentsNode.Shapes.Add(_owner.TranslateShapeLayerContents(_context, shapeContext, _context.Layer.Contents));
 
                     return layerHasMasks
                         ? _owner.TranslateAndApplyMasksForLayer(_context, rootNode)
