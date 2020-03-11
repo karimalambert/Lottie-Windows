@@ -62,9 +62,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             CoalesceContainerVisuals(graph);
             CoalesceOrthogonalVisuals(graph);
             CoalesceOrthogonalContainerVisuals(graph);
-            SimplifyProperties(graph);
             RemoveRedundantInsetClipVisuals(graph);
             PushSharedVisiblityUp(graph);
+            SimplifyProperties(graph);
 
             return root;
         }
@@ -343,10 +343,16 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 {
                     // Replace the container with the ShapeVisual.
                     var indexOfRedundantContainer = parentContainer.Children.IndexOf(container);
-                    parentContainer.Children.RemoveAt(indexOfRedundantContainer);
-                    parentContainer.Children.Insert(indexOfRedundantContainer, shapeVisual);
 
-                    CopyDescriptions(container, shapeVisual);
+                    // The container may have been already removed (this can happen if one of the
+                    // coalescing methods here doesn't update the graph).
+                    if (indexOfRedundantContainer >= 0)
+                    {
+                        parentContainer.Children.RemoveAt(indexOfRedundantContainer);
+                        parentContainer.Children.Insert(indexOfRedundantContainer, shapeVisual);
+
+                        CopyDescriptions(container, shapeVisual);
+                    }
                 }
             }
         }
@@ -938,12 +944,31 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 return false;
             }
 
-            // The properties do not overlap, but we have to check for TransformMatrix
-            // on the parent with Offset, Rotate, or Scale in the child because the
-            // ordering is significant (TransformMatrix is evaluated after Translate,
-            // Rotate, and Scale).
-            if (parent.HasFlag(PropertyId.TransformMatrix) &&
-                (child & (PropertyId.Offset | PropertyId.RotationAngleInDegrees | PropertyId.Scale)) != PropertyId.None)
+            // The properties do not overlap. But we have to check for some properties that
+            // need to be evaluated in a particular order, which means they cannot be just
+            // moved between the child and parent.
+            if ((parent & (PropertyId.Color | PropertyId.Opacity | PropertyId.Path)) == parent ||
+                (child & (PropertyId.Color | PropertyId.Opacity | PropertyId.Path)) == child)
+            {
+                // These properties are not order dependent.
+                return true;
+            }
+
+            // Evaluation order is Offset, Rotation, Scale, Transform.
+            if (((parent & PropertyId.TransformMatrix) != PropertyId.None) &&
+                ((child & (PropertyId.Offset | PropertyId.RotationAngleInDegrees | PropertyId.Scale | PropertyId.Clip)) != PropertyId.None))
+            {
+                return false;
+            }
+
+            if (((parent & PropertyId.RotationAngleInDegrees) != PropertyId.None) &&
+                ((child & (PropertyId.Offset | PropertyId.Clip)) != PropertyId.None))
+            {
+                return false;
+            }
+
+            if (((parent & PropertyId.Scale) != PropertyId.None) &&
+                ((child & (PropertyId.Offset | PropertyId.RotationAngleInDegrees | PropertyId.Clip)) != PropertyId.None))
             {
                 return false;
             }
@@ -996,17 +1021,60 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
         static void TransferContainerVisualProperties(ContainerVisual from, ContainerVisual to)
         {
-            to.BorderMode = from.BorderMode;
-            to.CenterPoint = from.CenterPoint;
-            to.Clip = from.Clip;
-            to.Comment = from.Comment;
-            to.Offset = from.Offset;
-            to.Opacity = from.Opacity;
-            to.RotationAngleInDegrees = from.RotationAngleInDegrees;
-            to.RotationAxis = from.RotationAxis;
-            to.Scale = from.Scale;
-            to.Size = from.Size;
-            to.TransformMatrix = from.TransformMatrix;
+            if (from.BorderMode.HasValue)
+            {
+                to.BorderMode = from.BorderMode;
+            }
+
+            if (from.CenterPoint.HasValue)
+            {
+                to.CenterPoint = from.CenterPoint;
+            }
+
+            if (from.Clip != null)
+            {
+                to.Clip = from.Clip;
+            }
+
+            if (from.Comment != null)
+            {
+                to.Comment = from.Comment;
+            }
+
+            if (from.Offset.HasValue)
+            {
+                to.Offset = from.Offset;
+            }
+
+            if (from.Opacity.HasValue)
+            {
+                to.Opacity = from.Opacity;
+            }
+
+            if (from.RotationAngleInDegrees.HasValue)
+            {
+                to.RotationAngleInDegrees = from.RotationAngleInDegrees;
+            }
+
+            if (from.RotationAxis.HasValue)
+            {
+                to.RotationAxis = from.RotationAxis;
+            }
+
+            if (from.Scale.HasValue)
+            {
+                to.Scale = from.Scale;
+            }
+
+            if (from.Size.HasValue)
+            {
+                to.Size = from.Size;
+            }
+
+            if (from.TransformMatrix.HasValue)
+            {
+                to.TransformMatrix = from.TransformMatrix;
+            }
 
             // Start the from's animations on the to.
             foreach (var anim in from.Animators)

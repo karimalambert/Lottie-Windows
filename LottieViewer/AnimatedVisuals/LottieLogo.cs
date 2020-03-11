@@ -20,7 +20,7 @@ namespace AnimatedVisuals
     // Name:
     // Frame rate:  30 fps
     // Frame count: 179
-    sealed class LottieLogo1 : Microsoft.UI.Xaml.Controls.IAnimatedVisualSource
+    sealed class LottieLogo : Microsoft.UI.Xaml.Controls.IAnimatedVisualSource
     {
         public Microsoft.UI.Xaml.Controls.IAnimatedVisual TryCreateAnimatedVisual(Compositor compositor, out object diagnostics)
         {
