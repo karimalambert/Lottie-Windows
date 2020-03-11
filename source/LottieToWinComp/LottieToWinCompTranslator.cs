@@ -46,7 +46,7 @@ using Sn = System.Numerics;
 namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 {
     /// <summary>
-    /// Translates a <see cref="LottieData.LottieComposition"/> to an equivalent <see cref="Visual"/>.
+    /// Translates a <see cref="LottieComposition"/> to an equivalent <see cref="Visual"/>.
     /// </summary>
     /// <remarks>See https://helpx.adobe.com/pdf/after_effects_reference.pdf"/> for the
     /// After Effects semantics.</remarks>
@@ -130,7 +130,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
         }
 
         /// <summary>
-        /// Attempts to translates the given <see cref="LottieData.LottieComposition"/>.
+        /// Attempts to translates the given <see cref="LottieComposition"/>.
         /// </summary>
         /// <param name="lottieComposition">The <see cref="LottieComposition"/> to translate.</param>
         /// <param name="targetUapVersion">The version of UAP that the translator will ensure compatibility with. Must be >= 7.</param>
@@ -377,18 +377,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                     yield return item.translatedLayer;
                 }
             }
-        }
-
-        // Helper for shape trees that need a mask applied.
-        // This function creates a ShapeVisual to house the
-        // shapes that we need to mask. It returns a visual
-        // which is the final composed masked result.
-        Visual TranslateAndApplyMasksOnShapeTree(
-            TranslationContext context,
-            CompositionContainerShape containerShapeToMask)
-        {
-            var contentShapeVisual = _c.CreateShapeVisualWithChild(containerShapeToMask, context.Size);
-            return TranslateAndApplyMasksForLayer(context, contentShapeVisual);
         }
 
         // Takes the paths for the given masks and adds them as shapes on the maskContainerShape.
@@ -1481,10 +1469,24 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             }
         }
 
+        // Helper for shape trees that need a mask applied.
+        // This function creates a ShapeVisual to house the
+        // shapes that we need to mask. It returns a visual
+        // which is the final composed masked result.
+        Visual TranslateAndApplyMasksOnShapeTree(
+            TranslationContext context,
+            CompositionContainerShape containerShapeToMask)
+        {
+            var contentShapeVisual = _c.CreateShapeVisualWithChild(containerShapeToMask, context.Size);
+            return TranslateAndApplyMasksForLayer(context, contentShapeVisual);
+        }
+
         // May return null if the layer does not produce any renderable content.
         CompositionSubGraph TranslateShapeLayer(TranslationContext.For<ShapeLayer> context)
         {
+            /*return new CompositionSubGraph.FromShapeLayer(this, context);*/
             bool layerHasMasks = false;
+
 #if !NoClipping
             layerHasMasks = context.Layer.Masks.Any();
 #endif
@@ -3805,7 +3807,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
         void ApplyColorKeyFrameAnimation(
             TranslationContext context,
-            in TrimmedAnimatable<LottieData.Color> value,
+            in TrimmedAnimatable<Color> value,
             CompositionObject targetObject,
             string targetPropertyName,
             string longDescription = null,
@@ -3849,7 +3851,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
         void ApplyColorKeyFrameAnimationAsVector4(
             TranslationContext context,
-            in TrimmedAnimatable<LottieData.Color> value,
+            in TrimmedAnimatable<Color> value,
             CompositionObject targetObject,
             string targetPropertyName,
             string longDescription = null,
@@ -4535,7 +4537,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             obj.Name = name;
         }
 
-        static WinCompData.Wui.Color Color(LottieData.Color color)
+        static WinCompData.Wui.Color Color(Color color)
             => WinCompData.Wui.Color.FromArgb((byte)(255 * color.A), (byte)(255 * color.R), (byte)(255 * color.G), (byte)(255 * color.B));
 
         static float Float(double value) => (float)value;
@@ -4550,9 +4552,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
         static float PercentF(double value) => (float)value / 100F;
 
-        static Sn.Vector2 Vector2(LottieData.Vector3 vector3) => Vector2(vector3.X, vector3.Y);
+        static Sn.Vector2 Vector2(Vector3 vector3) => Vector2(vector3.X, vector3.Y);
 
-        static Sn.Vector2 Vector2(LottieData.Vector2 vector2) => Vector2(vector2.X, vector2.Y);
+        static Sn.Vector2 Vector2(Vector2 vector2) => Vector2(vector2.X, vector2.Y);
 
         static Sn.Vector2 Vector2(double x, double y) => new Sn.Vector2((float)x, (float)y);
 
@@ -4560,19 +4562,19 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
         static Sn.Vector2 Vector2(float x) => new Sn.Vector2(x, x);
 
-        static Sn.Vector2? Vector2DefaultIsOne(LottieData.Vector3 vector2)
+        static Sn.Vector2? Vector2DefaultIsOne(Vector3 vector2)
             => vector2.X == 1 && vector2.Y == 1 ? null : (Sn.Vector2?)Vector2(vector2);
 
         static Sn.Vector2? Vector2DefaultIsZero(Sn.Vector2 vector2)
             => vector2.X == 0 && vector2.Y == 0 ? null : (Sn.Vector2?)vector2;
 
-        static Sn.Vector2 ClampedVector2(LottieData.Vector3 vector3) => ClampedVector2((float)vector3.X, (float)vector3.Y);
+        static Sn.Vector2 ClampedVector2(Vector3 vector3) => ClampedVector2((float)vector3.X, (float)vector3.Y);
 
         static Sn.Vector2 ClampedVector2(float x, float y) => Vector2(Clamp(x, 0, 1), Clamp(y, 0, 1));
 
         static Sn.Vector3 Vector3(double x, double y, double z) => new Sn.Vector3((float)x, (float)y, (float)z);
 
-        static Sn.Vector3 Vector3(LottieData.Vector3 vector3) => new Sn.Vector3((float)vector3.X, (float)vector3.Y, (float)vector3.Z);
+        static Sn.Vector3 Vector3(Vector3 vector3) => new Sn.Vector3((float)vector3.X, (float)vector3.Y, (float)vector3.Z);
 
         static Sn.Vector3? Vector3DefaultIsZero(Sn.Vector2 vector2)
             => vector2.X == 0 && vector2.Y == 0 ? null : (Sn.Vector3?)Vector3(vector2);
@@ -4580,7 +4582,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
         static Sn.Vector3? Vector3DefaultIsOne(Sn.Vector3 vector3)
             => vector3.X == 1 && vector3.Y == 1 && vector3.Z == 1 ? null : (Sn.Vector3?)vector3;
 
-        static Sn.Vector3? Vector3DefaultIsOne(LottieData.Vector3 vector3)
+        static Sn.Vector3? Vector3DefaultIsOne(Vector3 vector3)
             => Vector3DefaultIsOne(new Sn.Vector3((float)vector3.X, (float)vector3.Y, (float)vector3.Z));
 
         static Sn.Vector3 Vector3(Sn.Vector2 vector2) => Vector3(vector2.X, vector2.Y, 0);
@@ -4827,6 +4829,57 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                     Describe(result);
 
                     return result;
+                }
+            }
+
+            internal sealed class FromShapeLayer : CompositionSubGraph
+            {
+                readonly TranslationContext.For<ShapeLayer> _context;
+
+                internal FromShapeLayer(LottieToWinCompTranslator owner, TranslationContext.For<ShapeLayer> context)
+                    : base(owner)
+                {
+                    _context = context;
+                }
+
+                internal override bool IsShape => !_context.Layer.Masks.Any();
+
+                internal override CompositionShape GetShapeRoot()
+                {
+                    if (!_owner.TryCreateContainerShapeTransformChain(_context, out var rootNode, out var contentsNode))
+                    {
+                        // The layer is never visible.
+                        return null;
+                    }
+
+                    var shapeContext = new ShapeContentContext(_owner);
+                    shapeContext.UpdateOpacityFromTransform(_context, _context.Layer.Transform);
+                    contentsNode.Shapes.Add(_owner.TranslateShapeLayerContents(_context, shapeContext, _context.Layer.Contents));
+
+                    return rootNode;
+                }
+
+                internal override Visual GetVisualRoot(Sn.Vector2 maximumSize)
+                {
+                    bool layerHasMasks = false;
+#if !NoClipping
+                    layerHasMasks = _context.Layer.Masks.Any();
+#endif
+                    if (!_owner.TryCreateContainerVisualTransformChain(_context, out var rootNode, out var contentsNode))
+                    {
+                        // The layer is never visible.
+                        return null;
+                    }
+
+                    var shapeContext = new ShapeContentContext(_owner);
+                    shapeContext.UpdateOpacityFromTransform(_context, _context.Layer.Transform);
+                    var shapeTree = _owner.TranslateShapeLayerContents(_context, shapeContext, _context.Layer.Contents);
+                    var shapeVisual = _owner._c.CreateShapeVisualWithChild(shapeTree, maximumSize);
+                    contentsNode.Children.Add(shapeVisual);
+
+                    return layerHasMasks
+                        ? _owner.TranslateAndApplyMasksForLayer(_context, rootNode)
+                        : rootNode;
                 }
             }
         }

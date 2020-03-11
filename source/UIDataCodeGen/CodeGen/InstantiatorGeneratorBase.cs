@@ -1511,6 +1511,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 builder.WriteSubBuilder("CreateVector3KeyFrameAnimation");
                 builder.WriteSubBuilder("CreateVector4KeyFrameAnimation");
                 builder.WriteSubBuilder("CreateSpriteShape");
+                builder.WriteSubBuilder("CreateSpriteShapeWithFillBrush");
 
                 // Write factory methods for each node.
                 foreach (var node in _nodes)
@@ -1999,7 +2000,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 }
             }
 
-            void EnsureSpriteShapeHelperWritten(CodeBuilder builder)
+            void WriteCallHelperCreateSpriteShape(CodeBuilder builder, CompositionSpriteShape obj, ObjectData node)
             {
                 var b = builder.GetSubBuilder("CreateSpriteShape");
                 if (b.IsEmpty)
@@ -2012,6 +2013,28 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     b.CloseScope();
                     b.WriteLine();
                 }
+
+                WriteMatrixComment(builder, obj.TransformMatrix.Value);
+                builder.WriteLine($"{ConstVar} result = CreateSpriteShape({CallFactoryFromFor(node, obj.Geometry)}, {Matrix3x2(obj.TransformMatrix.Value)});");
+            }
+
+            void WriteCallHelperCreateSpriteShapeWithFillBrush(CodeBuilder builder, CompositionSpriteShape obj, ObjectData node)
+            {
+                var b = builder.GetSubBuilder("CreateSpriteShapeWithFillBrush");
+                if (b.IsEmpty)
+                {
+                    b.WriteLine($"CompositionSpriteShape CreateSpriteShape(CompositionGeometry geometry, Matrix3x2 transformMatrix, CompositionBrush fillBrush)");
+                    b.OpenScope();
+                    b.WriteLine($"{ConstVar} result = _c{Deref}CreateSpriteShape(geometry);");
+                    WritePropertySetStatement(b, "TransformMatrix", "transformMatrix");
+                    WritePropertySetStatement(b, "FillBrush", "fillBrush");
+                    b.WriteLine("return result;");
+                    b.CloseScope();
+                    b.WriteLine();
+                }
+
+                WriteMatrixComment(builder, obj.TransformMatrix.Value);
+                builder.WriteLine($"{ConstVar} result = CreateSpriteShape({CallFactoryFromFor(node, obj.Geometry)}, {Matrix3x2(obj.TransformMatrix.Value)}, {CallFactoryFromFor(node, obj.FillBrush)});");
             }
 
             // Starts an ExpressionAnimation that uses the shared singleton ExpressionAnimation.
@@ -2781,6 +2804,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             bool GenerateSpriteShapeFactory(CodeBuilder builder, CompositionSpriteShape obj, ObjectData node)
             {
+                var setFillBrush = true;
                 WriteObjectFactoryStart(builder, node);
                 if (obj.Geometry is null)
                 {
@@ -2792,9 +2816,17 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     if (obj.TransformMatrix.HasValue)
                     {
                         // Use the helper.
-                        EnsureSpriteShapeHelperWritten(builder);
-                        WriteMatrixComment(builder, obj.TransformMatrix.Value);
-                        builder.WriteLine($"{ConstVar} result = CreateSpriteShape({CallFactoryFromFor(node, obj.Geometry)}, {Matrix3x2(obj.TransformMatrix.Value)});");
+                        setFillBrush = false;
+
+                        if (obj.FillBrush is null)
+                        {
+                            WriteCallHelperCreateSpriteShape(builder, obj, node);
+                        }
+                        else
+                        {
+                            WriteCallHelperCreateSpriteShapeWithFillBrush(builder, obj, node);
+                        }
+
                         InitializeCompositionObject(builder, obj, node);
                         WritePropertySetStatement(builder, "CenterPoint", obj.CenterPoint);
                         WritePropertySetStatement(builder, "Offset", obj.Offset);
@@ -2808,7 +2840,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     }
                 }
 
-                if (obj.FillBrush != null)
+                if (setFillBrush && obj.FillBrush != null)
                 {
                     WritePropertySetStatement(builder, "FillBrush", CallFactoryFromFor(node, obj.FillBrush));
                 }
