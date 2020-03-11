@@ -242,6 +242,7 @@ sealed class LottieFileProcessor
             new[]
             {
                     ("Path", _file),
+                    ("Animator", translationStats.AnimatorCount.ToString()),
                     ("CanvasGeometry", translationStats.CanvasGeometryCount.ToString()),
                     ("ColorBrush", translationStats.ColorBrushCount.ToString()),
                     ("ColorGradientStop", translationStats.ColorGradientStopCount.ToString()),
@@ -285,6 +286,7 @@ sealed class LottieFileProcessor
                 new[]
                 {
                     ("Path", _file),
+                    ("Animator", (_afterOptimizationStats.AnimatorCount - _beforeOptimizationStats.AnimatorCount).ToString()),
                     ("CanvasGeometry", (_afterOptimizationStats.CanvasGeometryCount - _beforeOptimizationStats.CanvasGeometryCount).ToString()),
                     ("ColorBrush", (_afterOptimizationStats.ColorBrushCount - _beforeOptimizationStats.ColorBrushCount).ToString()),
                     ("ColorGradientStop", (_afterOptimizationStats.ColorGradientStopCount - _beforeOptimizationStats.ColorGradientStopCount).ToString()),
