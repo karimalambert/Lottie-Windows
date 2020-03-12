@@ -1485,7 +1485,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 // Write fields for constant values.
                 builder.WriteComment($"Animation duration: {_owner._compositionDuration.Ticks / (double)System.TimeSpan.TicksPerSecond,-1:N3} seconds.");
-                builder.WriteLine(ConstExprField(_stringifier.Int64TypeName, DurationTicksFieldName, $"{_stringifier.Int64(_owner._compositionDuration.Ticks)}"));
+                builder.WriteLine(ConstExprField(_stringifier.TypeInt64, DurationTicksFieldName, $"{_stringifier.Int64(_owner._compositionDuration.Ticks)}"));
 
                 // Write fields for each object that needs storage (i.e. objects that are referenced more than once).
                 // Write read-only fields first.
@@ -1971,7 +1971,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 var valueType = animationType switch
                 {
                     CompositionObjectType.ColorKeyFrameAnimation => "Color",
-                    CompositionObjectType.PathKeyFrameAnimation => "Path",
+                    CompositionObjectType.PathKeyFrameAnimation => ReferenceTypeName("CompositionPath"),
                     CompositionObjectType.ScalarKeyFrameAnimation => _stringifier.TypeFloat32,
                     CompositionObjectType.Vector2KeyFrameAnimation => _stringifier.TypeVector2,
                     CompositionObjectType.Vector3KeyFrameAnimation => _stringifier.TypeVector3,
@@ -1984,7 +1984,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 var b = builder.GetSubBuilder(methodName);
                 if (b.IsEmpty)
                 {
-                    b.WriteLine($"{animationType} {methodName}(float initialProgress, {valueType} initialValue, CompositionEasingFunction initialEasingFunction)");
+                    b.WriteLine($"{ReferenceTypeName(animationType.ToString())} {methodName}(float initialProgress, {valueType} initialValue, {ReferenceTypeName("CompositionEasingFunction")} initialEasingFunction)");
                     b.OpenScope();
                     b.WriteLine($"{ConstVar} result = _c{Deref}{methodName}();");
                     WritePropertySetStatement(b, "Duration", TimeSpan(_owner._compositionDuration));
@@ -2005,7 +2005,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 var b = builder.GetSubBuilder("CreateSpriteShape");
                 if (b.IsEmpty)
                 {
-                    b.WriteLine($"CompositionSpriteShape CreateSpriteShape(CompositionGeometry geometry, Matrix3x2 transformMatrix)");
+                    b.WriteLine($"{ReferenceTypeName("CompositionSpriteShape")} CreateSpriteShape({ReferenceTypeName("CompositionGeometry")} geometry, {_stringifier.TypeMatrix3x2} transformMatrix)");
                     b.OpenScope();
                     b.WriteLine($"{ConstVar} result = _c{Deref}CreateSpriteShape(geometry);");
                     WritePropertySetStatement(b, "TransformMatrix", "transformMatrix");
@@ -2023,7 +2023,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 var b = builder.GetSubBuilder("CreateSpriteShapeWithFillBrush");
                 if (b.IsEmpty)
                 {
-                    b.WriteLine($"CompositionSpriteShape CreateSpriteShape(CompositionGeometry geometry, Matrix3x2 transformMatrix, CompositionBrush fillBrush)");
+                    b.WriteLine($"{ReferenceTypeName("CompositionSpriteShape")} CreateSpriteShape({ReferenceTypeName("CompositionGeometry")} geometry, {_stringifier.TypeMatrix3x2} transformMatrix, {ReferenceTypeName("CompositionBrush")} fillBrush)");
                     b.OpenScope();
                     b.WriteLine($"{ConstVar} result = _c{Deref}CreateSpriteShape(geometry);");
                     WritePropertySetStatement(b, "TransformMatrix", "transformMatrix");

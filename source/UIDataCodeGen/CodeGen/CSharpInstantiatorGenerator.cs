@@ -366,8 +366,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.OpenScope();
 
             // Declare variables.
-            builder.WriteLine($"{_s.Const(_s.Int32TypeName)} c_loadedImageSurfaceCount = {info.LoadedImageSurfaces.Count};");
-            builder.WriteLine($"{_s.Int32TypeName} _loadCompleteEventCount;");
+            builder.WriteLine($"{_s.Const(_s.TypeInt32)} c_loadedImageSurfaceCount = {info.LoadedImageSurfaces.Count};");
+            builder.WriteLine($"{_s.TypeInt32} _loadCompleteEventCount;");
             builder.WriteLine("bool _isAnimatedVisualSourceDynamic = true;");
             builder.WriteLine("bool _isTryCreateAnimatedVisualCalled;");
             builder.WriteLine("bool _isImageLoadingStarted;");

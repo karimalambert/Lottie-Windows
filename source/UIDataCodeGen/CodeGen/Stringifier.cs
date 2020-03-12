@@ -31,10 +31,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         public virtual string IListAdd => "Add";
 
-        public virtual string Int32TypeName => "int";
-
-        public virtual string Int64TypeName => "long";
-
         public virtual string New(string typeName) => $"new {typeName}";
 
         public virtual string Null => "null";
@@ -259,6 +255,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         public virtual string Hex(int value) => $"0x{value.ToString("X2")}";
 
+        public virtual string TypeInt32 => "int";
+
+        public virtual string TypeInt64 => "long";
+
         public virtual string TypeFloat32 { get; } = "float";
 
         public virtual string TypeVector2 { get; } = "Vector2";
@@ -266,6 +266,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         public virtual string TypeVector3 { get; } = "Vector3";
 
         public virtual string TypeVector4 { get; } = "Vector4";
+
+        public virtual string TypeMatrix3x2 { get; } = "Matrix3x2";
 
         // Sets the first character to lower case.
         public string CamelCase(string value) => $"{char.ToLowerInvariant(value[0])}{value.Substring(1)}";

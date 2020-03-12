@@ -3223,11 +3223,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             Sequence<GradientStop> gradientStops,
             CompositeOpacity opacity)
         {
-            // Distinct() here eliminates any redundant stops. It is safe to eliminate them
-            // in the non-animated case. If there were key frames then it would be potentially dangerous
-            // as every key frame needs to have the same number of stops, and Distinct() might
-            // eliminate different stops from each KeyFrame.
-            var optimizedGradientStops = GradientStopOptimizer.Optimize(gradientStops.Items.ToArray()).Distinct();
+            var optimizedGradientStops = GradientStopOptimizer.OptimizeColorStops(GradientStopOptimizer.Optimize(gradientStops.Items.ToArray()));
 
             if (opacity.IsAnimated)
             {

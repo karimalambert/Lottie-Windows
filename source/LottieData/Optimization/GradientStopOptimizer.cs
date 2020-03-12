@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using Sn = System.Numerics;
 
 namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieData.Optimization
 {
@@ -197,5 +199,77 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieData.Optimization
                 r: Lerp((a.Offset, a.Color.R), (b.Offset, b.Color.R), atOffset),
                 g: Lerp((a.Offset, a.Color.G), (b.Offset, b.Color.G), atOffset),
                 b: Lerp((a.Offset, a.Color.B), (b.Offset, b.Color.B), atOffset));
+
+        /// <summary>
+        /// Removes any redundant <see cref="ColorGradientStop"/>s.
+        /// </summary>
+        /// <returns>A list of <see cref="ColorGradientStop"/>.</returns>
+        public static IEnumerable<ColorGradientStop> OptimizeColorStops(IEnumerable<ColorGradientStop> stops)
+        {
+            var list = stops.ToArray();
+
+            switch (list.Length)
+            {
+                case 0:
+                    yield break;
+
+                case 1:
+                    yield return list[0];
+                    yield break;
+            }
+
+            // There are at least 2 stops.
+            var left = list[0];
+
+            // Output the first stop.
+            yield return left;
+
+            var middle = list[1];
+
+            for (var i = 2; i < list.Length; i++)
+            {
+                // See if the middle stop can be removed.
+                var right = list[i];
+
+                // Determine the angle between the line from middle to left and the line
+                // from middle to right. If the angle is small, the gradient stop does
+                // not contribute significantly and can be safely removed.
+                var angle = GetAngleBetweenStops(left, middle, right);
+
+                if (angle > 0.001)
+                {
+                    // The middle stop is significant. Output it.
+                    yield return middle;
+                    left = middle;
+                }
+
+                middle = right;
+            }
+
+            // Output the last stop.
+            yield return list[list.Length - 1];
+        }
+
+        // Returns a value that indicates how significant stop b is in the sequence of stops [a,b,c]
+        static double GetAngleBetweenStops(ColorGradientStop a, ColorGradientStop b, ColorGradientStop c)
+        {
+            var colorU = new Sn.Vector4((float)(b.Offset - a.Offset), (float)(b.Color.R - a.Color.R), (float)(b.Color.G - a.Color.G), (float)(b.Color.B - a.Color.B));
+            var colorV = new Sn.Vector4((float)(c.Offset - b.Offset), (float)(c.Color.R - b.Color.R), (float)(c.Color.G - b.Color.G), (float)(c.Color.B - b.Color.B));
+
+            colorU = Sn.Vector4.Normalize(colorU);
+            colorV = Sn.Vector4.Normalize(colorV);
+
+            var colorAngle = Math.Acos(Sn.Vector4.Dot(colorU, colorV));
+
+            var alphaU = new Sn.Vector2((float)(b.Offset - a.Offset), (float)(b.Color.A - a.Color.A));
+            var alphaV = new Sn.Vector2((float)(c.Offset - b.Offset), (float)(c.Color.A - b.Color.A));
+
+            alphaU = Sn.Vector2.Normalize(alphaU);
+            alphaV = Sn.Vector2.Normalize(alphaV);
+
+            var alphaAngle = Math.Acos(Sn.Vector2.Dot(alphaU, alphaV));
+
+            return colorAngle + alphaAngle;
+        }
     }
 }

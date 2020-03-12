@@ -273,7 +273,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             }
             else
             {
-                builder.WriteLine($"ref class {info.ClassName} sealed");
+                builder.WriteLine($"public ref class {info.ClassName} sealed");
                 builder.Indent();
                 builder.WriteLine($": public {AnimatedVisualTypeName}");
                 builder.UnIndent();
