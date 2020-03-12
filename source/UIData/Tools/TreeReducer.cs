@@ -59,6 +59,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             RemoveEmptyContainers(graph);
             CoalesceContainerShapes(graph);
             CoalesceContainerShapes2(graph);
+            CoalesceContainerShapes3(graph);
             CoalesceContainerVisuals(graph);
             CoalesceOrthogonalVisuals(graph);
             CoalesceOrthogonalContainerVisuals(graph);
@@ -109,7 +110,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
         static IEnumerable<CompositionShape[]> GroupSimilarChildContainers(IContainShapes container)
         {
-            List<CompositionContainerShape> grouped = new List<CompositionContainerShape>();
+            var grouped = new List<CompositionContainerShape>();
 
             foreach (var child in container.Shapes)
             {
@@ -705,8 +706,52 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     // Copy the Transform from the child into the parent and move child's children into the parent.
                     parent.TransformMatrix = child.TransformMatrix;
 
-                    // Move the child'd children into the parent.
+                    // Move the child's children into the parent.
                     ElideContainerShape(graph, child);
+                }
+            }
+        }
+
+        // Find ContainerShapes that have a single SpriteShape with orthongonal properties
+        // and remove the ContainerShape.
+        static void CoalesceContainerShapes3(ObjectGraph<Node> graph)
+        {
+            var containerShapes = graph.CompositionObjectNodes.Where(n =>
+                n.Object.Type == CompositionObjectType.CompositionContainerShape &&
+                n.Object is CompositionContainerShape container &&
+                container.Shapes.Count == 1 &&
+                container.Shapes[0].Type == CompositionObjectType.CompositionSpriteShape
+                ).ToArray();
+
+            foreach (var (node, obj) in containerShapes)
+            {
+                var parent = (CompositionContainerShape)obj;
+
+                if (!parent.Shapes.Any())
+                {
+                    // The children have already been removed.
+                    continue;
+                }
+
+                var child = (CompositionSpriteShape)parent.Shapes[0];
+
+                var parentProperties = GetNonDefaultProperties(parent);
+                var childProperties = GetNonDefaultProperties(child);
+
+                // Common case is that the child has no non-default properties.
+                // We could handle more cases but it's more complicated.
+                if (childProperties == PropertyId.None)
+                {
+                    if ((parentProperties & PropertyId.Properties) != PropertyId.None)
+                    {
+                        // Ignore if the parent has PropertySet propeties. We could handle it but it's more complicated.
+                        continue;
+                    }
+
+                    // Copy the parent's properties onto the child and remove the parent.
+                    TransferShapeProperties(parent, child);
+
+                    ElideContainerShape(graph, parent);
                 }
             }
         }
@@ -777,7 +822,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             }
         }
 
-        static PropertyId GetNonDefaultProperties(CompositionContainerShape obj)
+        static PropertyId GetNonDefaultProperties(CompositionShape obj)
         {
             var result = PropertyId.None;
             if (obj.CenterPoint.HasValue)
@@ -976,7 +1021,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             return true;
         }
 
-        // If a ContainerVisual has exactly one child that is a SpriteVisual, and each
+        // If a ContainerVisual has exactly one child that is a SpriteVisual or ShapeVisual, and each
         // affects different sets of properties then properties from the container can be
         // copied into the SpriteVisual and the container can be removed.
         static void CoalesceOrthogonalVisuals(ObjectGraph<Node> graph)
@@ -989,7 +1034,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     n.Object is ContainerVisual container &&
                     n.Node.Parent is ContainerVisual &&
                     container.Children.Count == 1 &&
-                    container.Children[0].Type == CompositionObjectType.SpriteVisual;
+                    (container.Children[0].Type == CompositionObjectType.SpriteVisual ||
+                     container.Children[0].Type == CompositionObjectType.ShapeVisual);
             }).ToArray();
 
             foreach (var (node, obj) in containersWithASingleSprite)
@@ -1015,6 +1061,58 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
                     // Copy the values of the non-default properties from the parent to the child.
                     TransferContainerVisualProperties(parent, child);
+                }
+            }
+        }
+
+        static void TransferShapeProperties(CompositionShape from, CompositionShape to)
+        {
+            if (from.CenterPoint.HasValue)
+            {
+                to.CenterPoint = from.CenterPoint;
+            }
+
+            if (from.Comment != null)
+            {
+                to.Comment = from.Comment;
+            }
+
+            if (from.Offset.HasValue)
+            {
+                to.Offset = from.Offset;
+            }
+
+            if (from.RotationAngleInDegrees.HasValue)
+            {
+                to.RotationAngleInDegrees = from.RotationAngleInDegrees;
+            }
+
+            if (from.Scale.HasValue)
+            {
+                to.Scale = from.Scale;
+            }
+
+            if (from.TransformMatrix.HasValue)
+            {
+                to.TransformMatrix = from.TransformMatrix;
+            }
+
+            // Start the from's animations on the to.
+            foreach (var anim in from.Animators)
+            {
+                to.StartAnimation(anim.AnimatedProperty, anim.Animation);
+                if (anim.Controller.IsPaused || anim.Controller.Animators.Count > 0)
+                {
+                    var controller = to.TryGetAnimationController(anim.AnimatedProperty);
+                    if (anim.Controller.IsPaused)
+                    {
+                        controller.Pause();
+                    }
+
+                    foreach (var controllerAnim in anim.Controller.Animators)
+                    {
+                        controller.StartAnimation(controllerAnim.AnimatedProperty, controllerAnim.Animation);
+                    }
                 }
             }
         }

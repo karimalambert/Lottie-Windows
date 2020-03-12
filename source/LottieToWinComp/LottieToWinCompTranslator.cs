@@ -256,7 +256,15 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                 default:
                     // There are multiple contiguous shapes. Group them under a ShapeVisual.
                     // The ShapeVisual has to have a size (it clips to its size).
+                    // TODO - if the shape graphs share the same opacity and/or visiblity, get them
+                    //        to translate without opacity/visiblity and we'll pull those
+                    //        into the Visual.
                     var shapeVisual = _c.CreateShapeVisualWithChild(compositionShapes[0].subgraph.GetShapeRoot(), context.Size);
+
+                    if (_addDescriptions)
+                    {
+                        Describe(shapeVisual, "Layer aggregator");
+                    }
 
                     for (var i = 1; i < compositionShapes.Length; i++)
                     {
@@ -334,10 +342,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                     // If the layer is a shape then we need to wrap it
                     // in a shape visual so that it can be used for matte
                     // composition.
-                    if (layerIsMattedLayer ||
-                        mattedVisual != null)
+                    if (layerIsMattedLayer || mattedVisual != null)
                     {
-                        visual = _c.CreateShapeVisualWithChild(item.translatedLayer.GetShapeRoot(), context.Size);
+                        visual = item.translatedLayer.GetVisualRoot(context.Size);
                     }
                 }
                 else
@@ -577,7 +584,15 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
             // Create the mask tree from the masks.
             TranslateAndAddMaskPaths(context, masks, containerShapeMaskContentNode);
-            return _c.CreateShapeVisualWithChild(containerShapeMaskRootNode, context.Size);
+
+            var result = _c.CreateShapeVisualWithChild(containerShapeMaskRootNode, context.Size);
+
+            if (_addDescriptions)
+            {
+                Describe(result, "Masks");
+            }
+
+            return result;
         }
 
         Visual TranslateAndApplyMasks(TranslationContext context, ReadOnlySpan<Mask> masks, Visual visualToMask, CanvasComposite compositeMode)
@@ -880,6 +895,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             // Create the shape visual.
             var shapeVisual = _c.CreateShapeVisualWithChild(transformsRoot, context.Size);
 
+            if (_addDescriptions)
+            {
+                Describe(shapeVisual, $"Shape tree root for layer: {context.Layer.Name}");
+            }
+
             contentsVisual.Children.Add(shapeVisual);
 
             return true;
@@ -952,6 +972,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                 var visibilityNode = _c.CreateContainerShape();
                 visibilityNode.Shapes.Add(transformsRoot);
                 rootNode = visibilityNode;
+
+                if (_addDescriptions)
+                {
+                    Describe(visibilityNode, $"Visibility for layer: {context.Layer.Name}");
+                }
 
                 // Animate between Scale(0,0) and Scale(1,1).
                 var visibilityAnimation = _c.CreateVector2KeyFrameAnimation();
