@@ -31,6 +31,52 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieData.Optimization
                 easing: keyFrame.Easing);
 
         /// <summary>
+        /// Returns an equivalent list of keyframes with any redundant color stops removed.
+        /// </summary>
+        /// <returns>An equivalent list of keyframes with any redundant color stops removed.</returns>
+        public static IEnumerable<KeyFrame<Sequence<ColorGradientStop>>> RemoveRedundantStops(IEnumerable<KeyFrame<Sequence<ColorGradientStop>>> keyFrames)
+        {
+            var input = keyFrames.ToArray();
+            var redundancies = input.Select(kf => FindRedundantColorStops(kf.Value.ToArray())).Aggregate((a, b) =>
+            {
+                if (a == null)
+                {
+                    return b;
+                }
+
+                for (var i = 0; i < a.Length; i++)
+                {
+                    a[i] &= b[i];
+                }
+
+                return a;
+            });
+
+            for (var i = 0; i < input.Length; i++)
+            {
+                var keyFrame = input[i];
+
+                yield return new KeyFrame<Sequence<ColorGradientStop>>(
+                    frame: keyFrame.Frame,
+                    value: new Sequence<ColorGradientStop>(Optimize(keyFrame.Value.ToArray(), redundancies)),
+                    spatialControlPoint1: keyFrame.SpatialControlPoint1,
+                    spatialControlPoint2: keyFrame.SpatialControlPoint2,
+                    easing: keyFrame.Easing);
+            }
+        }
+
+        static IEnumerable<ColorGradientStop> Optimize(ColorGradientStop[] stops, bool[] redundancies)
+        {
+            for (var i = 0; i < redundancies.Length; i++)
+            {
+                if (!redundancies[i])
+                {
+                    yield return stops[i];
+                }
+            }
+        }
+
+        /// <summary>
         /// Converts a list of <see cref="GradientStop"/>s into an equivalent list of
         /// <see cref="ColorGradientStop"/> of the same length, but with the opacity from any
         /// <see cref="OpacityGradientStop"/>s multiplied into the alpha channel of the
@@ -208,46 +254,57 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieData.Optimization
         {
             var list = stops.ToArray();
 
-            switch (list.Length)
+            var redundantStops = FindRedundantColorStops(list);
+            for (var i = 0; i < list.Length; i++)
             {
-                case 0:
-                    yield break;
-
-                case 1:
-                    yield return list[0];
-                    yield break;
-            }
-
-            // There are at least 2 stops.
-            var left = list[0];
-
-            // Output the first stop.
-            yield return left;
-
-            var middle = list[1];
-
-            for (var i = 2; i < list.Length; i++)
-            {
-                // See if the middle stop can be removed.
-                var right = list[i];
-
-                // Determine the angle between the line from middle to left and the line
-                // from middle to right. If the angle is small, the gradient stop does
-                // not contribute significantly and can be safely removed.
-                var angle = GetAngleBetweenStops(left, middle, right);
-
-                if (angle > 0.001)
+                if (!redundantStops[i])
                 {
-                    // The middle stop is significant. Output it.
-                    yield return middle;
-                    left = middle;
+                    // Output the stop if it's not redundant.
+                    yield return list[i];
                 }
+            }
+        }
 
-                middle = right;
+        // Returns a bool for each stop, set to true if the stop is redundant.
+        // This is particularly useful for eliminating the default "midpoint" stop
+        // that AfterEffects creates between any 2 stops that the user adds.
+        static bool[] FindRedundantColorStops(ColorGradientStop[] stops)
+        {
+            var result = new bool[stops.Length];
+
+            // We can only have redundant stops if there are 3 or more.
+            if (stops.Length >= 3)
+            {
+                var left = 0;
+                var middle = 1;
+
+                for (var i = 2; i < stops.Length; i++)
+                {
+                    // See if the middle stop is redundant.
+                    var right = i;
+
+                    // Determine the angle between the line from middle to left and the line
+                    // from middle to right. If the angle is small, the gradient stop does
+                    // not contribute significantly and can be safely removed.
+                    var angle = GetAngleBetweenStops(stops[left], stops[middle], stops[right]);
+
+                    // This value can be tuned to be more or less sensitive to middle gradients
+                    // that are more or less off the line formed by the outer gradients.
+                    if (angle < 0.005)
+                    {
+                        // The middle stop is redundant.
+                        result[middle] = true;
+                    }
+                    else
+                    {
+                        left = middle;
+                    }
+
+                    middle = right;
+                }
             }
 
-            // Output the last stop.
-            yield return list[list.Length - 1];
+            return result;
         }
 
         // Returns a value that indicates how significant stop b is in the sequence of stops [a,b,c]

@@ -3111,8 +3111,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
             // Lottie represents stops as either color or opacity stops. Convert them all to color stops.
             var colorStopKeyFrames = gradientStops.KeyFrames.SelectToArray(kf => GradientStopOptimizer.Optimize(kf));
-            var stopsCount = gradientStops.InitialValue.Items.Length;
-            var keyframesCount = gradientStops.KeyFrames.Length;
+            colorStopKeyFrames = GradientStopOptimizer.RemoveRedundantStops(colorStopKeyFrames).ToArray();
+            var stopsCount = colorStopKeyFrames[0].Value.Count();
+            var keyframesCount = colorStopKeyFrames.Length;
 
             // The opacity has animation. Create an expression to relate the opacity value to the color value.
             var animatableOpacities =
@@ -3180,8 +3181,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
             // Lottie represents stops as either color or opacity stops. Convert them all to color stops.
             var colorStopKeyFrames = gradientStops.KeyFrames.SelectToArray(kf => GradientStopOptimizer.Optimize(kf));
-            var stopsCount = gradientStops.InitialValue.Items.Length;
-            var keyframesCount = gradientStops.KeyFrames.Length;
+            colorStopKeyFrames = GradientStopOptimizer.RemoveRedundantStops(colorStopKeyFrames).ToArray();
+            var stopsCount = colorStopKeyFrames[0].Value.Count();
+            var keyframesCount = colorStopKeyFrames.Length;
 
             // Create the Composition stops and animate them.
             for (var i = 0; i < stopsCount; i++)
