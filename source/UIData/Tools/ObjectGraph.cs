@@ -108,6 +108,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 case CompositionObjectType.AnimationController:
                     VisitAnimationController((AnimationController)obj, node);
                     break;
+                case CompositionObjectType.BooleanKeyFrameAnimation:
+                    VisitBooleanKeyFrameAnimation((BooleanKeyFrameAnimation)obj, node);
+                    break;
                 case CompositionObjectType.ColorKeyFrameAnimation:
                     VisitColorKeyFrameAnimation((ColorKeyFrameAnimation)obj, node);
                     break;
@@ -570,6 +573,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
         bool VisitCompositionBrush(CompositionBrush obj, T node)
         {
             return VisitCompositionObject(obj, node);
+        }
+
+        bool VisitBooleanKeyFrameAnimation(BooleanKeyFrameAnimation obj, T node)
+        {
+            return VisitKeyFrameAnimation(obj, node);
         }
 
         bool VisitColorKeyFrameAnimation(ColorKeyFrameAnimation obj, T node)

@@ -267,6 +267,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     break;
 
                 // For now we only handle some types of animations.
+                case CompositionObjectType.BooleanKeyFrameAnimation:
                 case CompositionObjectType.ColorKeyFrameAnimation:
                 case CompositionObjectType.PathKeyFrameAnimation:
                 case CompositionObjectType.Vector3KeyFrameAnimation:

@@ -400,6 +400,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie
             {
                 case Wd.CompositionObjectType.AnimationController:
                     return GetAnimationController((Wd.AnimationController)obj);
+                case Wd.CompositionObjectType.BooleanKeyFrameAnimation:
+                    return GetBooleanKeyFrameAnimation((Wd.BooleanKeyFrameAnimation)obj);
                 case Wd.CompositionObjectType.ColorKeyFrameAnimation:
                     return GetColorKeyFrameAnimation((Wd.ColorKeyFrameAnimation)obj);
                 case Wd.CompositionObjectType.CompositionColorBrush:
@@ -554,6 +556,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie
             {
                 case Wd.CompositionObjectType.ExpressionAnimation:
                     return GetExpressionAnimation((Wd.ExpressionAnimation)obj);
+                case Wd.CompositionObjectType.BooleanKeyFrameAnimation:
+                    return GetBooleanKeyFrameAnimation((Wd.BooleanKeyFrameAnimation)obj);
                 case Wd.CompositionObjectType.ColorKeyFrameAnimation:
                     return GetColorKeyFrameAnimation((Wd.ColorKeyFrameAnimation)obj);
                 case Wd.CompositionObjectType.PathKeyFrameAnimation:
@@ -600,6 +604,36 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie
             }
             result = CacheAndInitializeAnimation(obj, _c.CreateExpressionAnimation(obj.Expression));
 #endif
+            StartAnimations(obj, result);
+            return result;
+        }
+
+        Wc.BooleanKeyFrameAnimation GetBooleanKeyFrameAnimation(Wd.BooleanKeyFrameAnimation obj)
+        {
+            if (GetExisting(obj, out Wc.BooleanKeyFrameAnimation result))
+            {
+                return result;
+            }
+
+            result = CacheAndInitializeKeyFrameAnimation(obj, _c.CreateBooleanKeyFrameAnimation());
+
+            foreach (var kf in obj.KeyFrames)
+            {
+                switch (kf.Type)
+                {
+                    case Wd.KeyFrameType.Expression:
+                        var expressionKeyFrame = (Wd.KeyFrameAnimation<bool, Expr.Boolean>.ExpressionKeyFrame)kf;
+                        result.InsertExpressionKeyFrame(kf.Progress, expressionKeyFrame.Expression.ToText());
+                        break;
+                    case Wd.KeyFrameType.Value:
+                        var valueKeyFrame = (Wd.KeyFrameAnimation<bool, Expr.Boolean>.ValueKeyFrame)kf;
+                        result.InsertKeyFrame(kf.Progress, valueKeyFrame.Value);
+                        break;
+                    default:
+                        throw new InvalidOperationException();
+                }
+            }
+
             StartAnimations(obj, result);
             return result;
         }

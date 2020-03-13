@@ -410,6 +410,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             {
                 case CompositionObjectType.AnimationController:
                     return GetAnimationController((AnimationController)obj);
+                case CompositionObjectType.BooleanKeyFrameAnimation:
+                    return GetBooleanKeyFrameAnimation((BooleanKeyFrameAnimation)obj);
                 case CompositionObjectType.ColorKeyFrameAnimation:
                     return GetColorKeyFrameAnimation((ColorKeyFrameAnimation)obj);
                 case CompositionObjectType.CompositionColorBrush:
@@ -564,6 +566,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             {
                 case CompositionObjectType.ExpressionAnimation:
                     return GetExpressionAnimation((ExpressionAnimation)obj);
+                case CompositionObjectType.BooleanKeyFrameAnimation:
+                    return GetBooleanKeyFrameAnimation((BooleanKeyFrameAnimation)obj);
                 case CompositionObjectType.ColorKeyFrameAnimation:
                     return GetColorKeyFrameAnimation((ColorKeyFrameAnimation)obj);
                 case CompositionObjectType.PathKeyFrameAnimation:
@@ -589,6 +593,36 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             }
 
             result = CacheAndInitializeAnimation(obj, _c.CreateExpressionAnimation(obj.Expression));
+            StartAnimationsAndFreeze(obj, result);
+            return result;
+        }
+
+        BooleanKeyFrameAnimation GetBooleanKeyFrameAnimation(BooleanKeyFrameAnimation obj)
+        {
+            if (GetExisting(obj, out var result))
+            {
+                return result;
+            }
+
+            result = CacheAndInitializeKeyFrameAnimation(obj, _c.CreateBooleanKeyFrameAnimation());
+
+            foreach (var kf in obj.KeyFrames)
+            {
+                switch (kf.Type)
+                {
+                    case KeyFrameType.Expression:
+                        var expressionKeyFrame = (KeyFrameAnimation<bool, Expr.Boolean>.ExpressionKeyFrame)kf;
+                        result.InsertExpressionKeyFrame(kf.Progress, expressionKeyFrame.Expression, GetCompositionEasingFunction(kf.Easing));
+                        break;
+                    case KeyFrameType.Value:
+                        var valueKeyFrame = (KeyFrameAnimation<bool, Expr.Boolean>.ValueKeyFrame)kf;
+                        result.InsertKeyFrame(kf.Progress, valueKeyFrame.Value, GetCompositionEasingFunction(kf.Easing));
+                        break;
+                    default:
+                        throw new InvalidOperationException();
+                }
+            }
+
             StartAnimationsAndFreeze(obj, result);
             return result;
         }

@@ -55,6 +55,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.Tools
                 case CompositionObjectType.AnimationController:
                     yield return FromAnimationController((AnimationController)obj);
                     break;
+                case CompositionObjectType.BooleanKeyFrameAnimation:
+                    yield return FromBooleanKeyFrameAnimation((BooleanKeyFrameAnimation)obj);
+                    break;
                 case CompositionObjectType.ColorKeyFrameAnimation:
                     yield return FromColorKeyFrameAnimation((ColorKeyFrameAnimation)obj);
                     break;
@@ -141,6 +144,18 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.Tools
                     break;
                 default:
                     throw new InvalidOperationException();
+            }
+        }
+
+        XElement FromBooleanKeyFrameAnimation(BooleanKeyFrameAnimation obj)
+        {
+            return new XElement(GetCompositionObjectName(obj), GetContents());
+            IEnumerable<XObject> GetContents()
+            {
+                foreach (var item in GetCompositionObjectContents(obj))
+                {
+                    yield return item;
+                }
             }
         }
 
@@ -783,6 +798,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.Tools
             {
                 case CompositionObjectType.ExpressionAnimation:
                     return FromExpressionAnimation((ExpressionAnimation)animation, name);
+                case CompositionObjectType.BooleanKeyFrameAnimation:
                 case CompositionObjectType.ColorKeyFrameAnimation:
                 case CompositionObjectType.PathKeyFrameAnimation:
                 case CompositionObjectType.ScalarKeyFrameAnimation:

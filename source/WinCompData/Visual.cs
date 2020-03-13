@@ -27,6 +27,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData
 
         public CompositionClip Clip { get; set; }
 
+        // Defaults to true.
+        public bool? IsVisible { get; set; }
+
         // Defaults to 0.
         public Vector3? Offset { get; set; }
 

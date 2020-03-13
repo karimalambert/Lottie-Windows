@@ -34,6 +34,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     case CompositionObjectType.AnimationController:
                         AnimationControllerCount++;
                         break;
+                    case CompositionObjectType.BooleanKeyFrameAnimation:
+                        BooleanKeyFrameAnimationCount++;
+                        break;
                     case CompositionObjectType.ColorKeyFrameAnimation:
                         ColorKeyFrameAnimationCount++;
                         break;
@@ -147,6 +150,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
         public int AnimationControllerCount { get; }
 
         public int AnimatorCount { get; }
+
+        public int BooleanKeyFrameAnimationCount { get; }
 
         public int ColorKeyFrameAnimationCount { get; }
 

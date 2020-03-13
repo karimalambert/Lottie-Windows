@@ -1612,6 +1612,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     case CompositionObjectType.AnimationController:
                         // Do not generate code for animation controllers. It is done inline in the CompositionObject initialization.
                         throw new InvalidOperationException();
+                    case CompositionObjectType.BooleanKeyFrameAnimation:
+                        return GenerateBooleanKeyFrameAnimationFactory(builder, (BooleanKeyFrameAnimation)obj, node);
                     case CompositionObjectType.ColorKeyFrameAnimation:
                         return GenerateColorKeyFrameAnimationFactory(builder, (ColorKeyFrameAnimation)obj, node);
                     case CompositionObjectType.CompositionColorBrush:
@@ -1970,6 +1972,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 var valueType = animationType switch
                 {
+                    CompositionObjectType.BooleanKeyFrameAnimation => "bool",
                     CompositionObjectType.ColorKeyFrameAnimation => "Color",
                     CompositionObjectType.PathKeyFrameAnimation => ReferenceTypeName("CompositionPath"),
                     CompositionObjectType.ScalarKeyFrameAnimation => _stringifier.TypeFloat32,
@@ -1984,7 +1987,18 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 var b = builder.GetSubBuilder(methodName);
                 if (b.IsEmpty)
                 {
-                    b.WriteLine($"{ReferenceTypeName(animationType.ToString())} {methodName}(float initialProgress, {valueType} initialValue, {ReferenceTypeName("CompositionEasingFunction")} initialEasingFunction)");
+                    // BooleanKeyFrameAnimations never take an easing function.
+                    var easingParameter =
+                        animationType == CompositionObjectType.BooleanKeyFrameAnimation
+                            ? string.Empty
+                            : $", {ReferenceTypeName("CompositionEasingFunction")} initialEasingFunction";
+
+                    var easingArgument =
+                        animationType == CompositionObjectType.BooleanKeyFrameAnimation
+                            ? string.Empty
+                            : $", initialEasingFunction";
+
+                    b.WriteLine($"{ReferenceTypeName(animationType.ToString())} {methodName}(float initialProgress, {valueType} initialValue{easingParameter})");
                     b.OpenScope();
                     b.WriteLine($"{ConstVar} result = _c{Deref}{methodName}();");
                     WritePropertySetStatement(b, "Duration", TimeSpan(_owner._compositionDuration));
@@ -1993,7 +2007,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                         WritePropertySetStatement(b, "InterpolationSpace", ColorSpace(CompositionColorSpace.Rgb));
                     }
 
-                    b.WriteLine($"result{Deref}InsertKeyFrame(initialProgress, initialValue, initialEasingFunction);");
+                    b.WriteLine($"result{Deref}InsertKeyFrame(initialProgress, initialValue{easingArgument});");
                     b.WriteLine("return result;");
                     b.CloseScope();
                     b.WriteLine();
@@ -2344,6 +2358,53 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 WritePropertySetStatement(builder, "Duration", TimeSpan(animation.Duration));
 
                 InitializeCompositionAnimation(builder, animation, node);
+            }
+
+            bool GenerateBooleanKeyFrameAnimationFactory(CodeBuilder builder, BooleanKeyFrameAnimation obj, ObjectData node)
+            {
+                WriteObjectFactoryStart(builder, node);
+
+                var keyFrames = obj.KeyFrames;
+                var firstKeyFrame = keyFrames.First();
+
+                // If the duration is equal to the duration of the composition, use a helper.
+                if (obj.Duration == _owner._compositionDuration &&
+                    firstKeyFrame.Type == KeyFrameType.Value)
+                {
+                    EnsureKeyFrameAnimationHelperWritten(builder, obj.Type);
+
+                    // Call the helper to create the animation. This will also set the duration and
+                    // take the first key frame.
+                    var kf = (KeyFrameAnimation<bool, Expr.Boolean>.ValueKeyFrame)firstKeyFrame;
+                    WriteCreateAssignment(builder, node, $"Create{obj.Type}({Float(kf.Progress)}, {Bool(kf.Value)})");
+                    InitializeCompositionAnimation(builder, obj, node);
+                    keyFrames = keyFrames.Skip(1);
+                }
+                else
+                {
+                    WriteCreateAndAssignKeyFrameAnimation(builder, obj, node);
+                }
+
+                foreach (var kf in keyFrames)
+                {
+                    switch (kf.Type)
+                    {
+                        case KeyFrameType.Expression:
+                            var expressionKeyFrame = (KeyFrameAnimation<bool, Expr.Boolean>.ExpressionKeyFrame)kf;
+                            builder.WriteLine($"result{Deref}InsertExpressionKeyFrame({Float(kf.Progress)}, {String(expressionKeyFrame.Expression)}, {_stringifier.Null});");
+                            break;
+                        case KeyFrameType.Value:
+                            var valueKeyFrame = (KeyFrameAnimation<bool, Expr.Boolean>.ValueKeyFrame)kf;
+                            builder.WriteLine($"result{Deref}InsertKeyFrame({Float(kf.Progress)}, {Bool(valueKeyFrame.Value)});");
+                            break;
+                        default:
+                            throw new InvalidOperationException();
+                    }
+                }
+
+                StartAnimationsOnResult(builder, obj, node);
+                WriteObjectFactoryEnd(builder);
+                return true;
             }
 
             bool GenerateColorKeyFrameAnimationFactory(CodeBuilder builder, ColorKeyFrameAnimation obj, ObjectData node)

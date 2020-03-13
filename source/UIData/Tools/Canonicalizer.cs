@@ -74,6 +74,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 CanonicalizeExpressionAnimations();
 
                 CanonicalizeKeyFrameAnimations<CompositionPath, Expr.Void>(CompositionObjectType.PathKeyFrameAnimation, CompositionPathEqualityComparer);
+                CanonicalizeKeyFrameAnimations<bool, Expr.Boolean>(CompositionObjectType.BooleanKeyFrameAnimation);
                 CanonicalizeKeyFrameAnimations<Wui.Color, Expr.Color>(CompositionObjectType.ColorKeyFrameAnimation);
                 CanonicalizeKeyFrameAnimations<float, Expr.Scalar>(CompositionObjectType.ScalarKeyFrameAnimation);
                 CanonicalizeKeyFrameAnimations<Sn.Vector2, Expr.Vector2>(CompositionObjectType.Vector2KeyFrameAnimation);
