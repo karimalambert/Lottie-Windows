@@ -147,6 +147,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData
         {
         }
 
+        public override string ToString() => Type.ToString();
+
         /// <summary>
         /// An animation bound to a property on this object.
         /// </summary>
@@ -183,7 +185,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData
             public AnimationController Controller { get; }
 
             /// <inheritdoc/>
-            public override string ToString() => $"{Animation.Type} bound to {AnimatedProperty}";
+            public override string ToString() => AnimatedProperty;
         }
     }
 }

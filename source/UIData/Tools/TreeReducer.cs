@@ -20,18 +20,27 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
         internal static Visual OptimizeContainers(Visual root)
         {
             // Running the optimization multiple times can improve the results.
-            for (var i = 0; i < 2; i++)
+            // Keep iterating as long as the number of nodes is reducing.
+            var graph = ObjectGraph<Node>.FromCompositionObject(root, includeVertices: true);
+            var beforeCount = int.MaxValue;
+            var afterCount = graph.Nodes.Count();
+
+            while (afterCount < beforeCount)
             {
-                root = Optimize(root);
+                beforeCount = afterCount;
+
+                Optimize(graph);
+
+                // Rebuild the graph.
+                graph = ObjectGraph<Node>.FromCompositionObject(root, includeVertices: true);
+                afterCount = graph.Nodes.Count();
             }
 
             return root;
         }
 
-        static Visual Optimize(Visual root)
+        static void Optimize(ObjectGraph<Node> graph)
         {
-            var graph = ObjectGraph<Node>.FromCompositionObject(root, includeVertices: true);
-
             // Discover the parents of each container
             foreach (var node in graph.CompositionObjectNodes)
             {
@@ -66,8 +75,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             RemoveRedundantInsetClipVisuals(graph);
             PushSharedVisiblityUp(graph);
             SimplifyProperties(graph);
-
-            return root;
         }
 
         // Finds ContainerShapes that only exist to control visibility and if there are multiple of
