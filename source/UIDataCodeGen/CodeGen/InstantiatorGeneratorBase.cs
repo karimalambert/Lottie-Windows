@@ -1384,11 +1384,19 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 }
             }
 
-            void WritePropertySetStatementDefaultIsFalse(CodeBuilder builder, string propertyName, bool value, string target = "result")
+            void WritePropertySetStatementDefaultIsFalse(CodeBuilder builder, string propertyName, bool? value, string target = "result")
             {
-                if (value)
+                if (value.HasValue && value.Value)
                 {
-                    WritePropertySetStatement(builder, propertyName, Bool(value), target);
+                    WritePropertySetStatement(builder, propertyName, Bool(true), target);
+                }
+            }
+
+            void WritePropertySetStatementDefaultIsTrue(CodeBuilder builder, string propertyName, bool? value, string target = "result")
+            {
+                if (value.HasValue && !value.Value)
+                {
+                    WritePropertySetStatement(builder, propertyName, Bool(false), target);
                 }
             }
 
@@ -1504,6 +1512,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 // Create room for helper methods.
                 builder.WriteSubBuilder("BindProperty");
                 builder.WriteSubBuilder("BindProperty2");
+                builder.WriteSubBuilder("CreateBooleanKeyFrameAnimation");
                 builder.WriteSubBuilder("CreateColorKeyFrameAnimation");
                 builder.WriteSubBuilder("CreatePathKeyFrameAnimation");
                 builder.WriteSubBuilder("CreateScalarKeyFrameAnimation");
@@ -2205,6 +2214,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     WritePropertySetStatement(builder, "Clip", CallFactoryFromFor(node, obj.Clip));
                 }
 
+                WritePropertySetStatementDefaultIsTrue(builder, "IsVisible", obj.IsVisible);
                 WritePropertySetStatement(builder, "Offset", obj.Offset);
                 WritePropertySetStatement(builder, "Opacity", obj.Opacity);
                 WritePropertySetStatement(builder, "RotationAngleInDegrees", obj.RotationAngleInDegrees);
@@ -3045,7 +3055,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 if (translation.HasValue)
                 {
-                    builder.WriteComment($"Translate:{translation}");
+                    // Use the word "Offset" to be consistent with Composition APIs.
+                    builder.WriteComment($"Offset:{translation}");
                 }
 
                 if (scale.HasValue)

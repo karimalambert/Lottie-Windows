@@ -181,11 +181,14 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
             target.BorderMode = source.BorderMode;
             target.CenterPoint = source.CenterPoint;
+            target.IsVisible = source.IsVisible;
             target.Offset = source.Offset;
             target.Opacity = source.Opacity;
             target.RotationAngleInDegrees = source.RotationAngleInDegrees;
+            target.RotationAxis = source.RotationAxis;
             target.Scale = source.Scale;
             target.Size = source.Size;
+            target.TransformMatrix = source.TransformMatrix;
 
             return target;
         }
@@ -616,7 +619,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                         break;
                     case KeyFrameType.Value:
                         var valueKeyFrame = (KeyFrameAnimation<bool, Expr.Boolean>.ValueKeyFrame)kf;
-                        result.InsertKeyFrame(kf.Progress, valueKeyFrame.Value, GetCompositionEasingFunction(kf.Easing));
+                        result.InsertKeyFrame(kf.Progress, valueKeyFrame.Value);
                         break;
                     default:
                         throw new InvalidOperationException();
@@ -793,6 +796,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
         CompositionEasingFunction GetCompositionEasingFunction(CompositionEasingFunction obj)
         {
+            if (obj is null)
+            {
+                return null;
+            }
+
             switch (obj.Type)
             {
                 case CompositionObjectType.LinearEasingFunction:

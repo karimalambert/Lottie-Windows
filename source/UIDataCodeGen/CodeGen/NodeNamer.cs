@@ -103,6 +103,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             {
                 // For some animations, we can include a description of the start and end values
                 // to make the names more descriptive.
+                CompositionObjectType.BooleanKeyFrameAnimation
+                    => NodeName.FromNameAndDescription("BooleanAnimation", DescribeAnimationRange((BooleanKeyFrameAnimation)obj)),
                 CompositionObjectType.ColorKeyFrameAnimation
                     => NodeName.FromNameAndDescription("ColorAnimation", DescribeAnimationRange((ColorKeyFrameAnimation)obj)),
                 CompositionObjectType.ScalarKeyFrameAnimation
@@ -232,6 +234,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             cleanedImageName = cleanedImageName.Replace("__", "_");
             return NodeName.FromNameAndDescription("Image", cleanedImageName);
         }
+
+        // Returns a string for use in an identifier that describes a BooleanKeyFrameAnimation, or null
+        // if the animation cannot be described.
+        static string DescribeAnimationRange(BooleanKeyFrameAnimation animation) => DescribeAnimationRange(animation, v => v.ToString());
 
         // Returns a string for use in an identifier that describes a ColorKeyFrameAnimation, or null
         // if the animation cannot be described.

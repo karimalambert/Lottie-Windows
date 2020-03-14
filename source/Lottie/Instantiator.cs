@@ -188,6 +188,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie
                 target.Clip = GetCompositionClip(source.Clip);
             }
 
+            if (source.IsVisible.HasValue)
+            {
+                target.IsVisible = source.IsVisible.Value;
+            }
+
             if (source.Offset.HasValue)
             {
                 target.Offset = source.Offset.Value;

@@ -296,9 +296,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     container.CenterPoint is null &&
                     container.Clip != null &&
                     container.Clip.Type == CompositionObjectType.InsetClip &&
+                    container.IsVisible is null &&
                     container.Offset is null &&
                     container.Opacity is null &&
                     container.RotationAngleInDegrees is null &&
+                    container.RotationAxis is null &&
                     container.Scale is null &&
                     container.Size != null &&
                     container.TransformMatrix is null &&
@@ -378,7 +380,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             }
         }
 
-        // Remove the centerpoint property if it's redundant, and convert properties to TransformMatrix if possible.
+        // Remove the CenterPoint and RotationAxis properties if they're redundant,
+        // and convert properties to TransformMatrix if possible.
         static void SimplifyProperties(Visual obj)
         {
             if (obj.CenterPoint.HasValue &&
@@ -386,8 +389,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 !obj.RotationAngleInDegrees.HasValue &&
                 !obj.Animators.Where(a => a.AnimatedProperty == nameof(obj.Scale) || a.AnimatedProperty == nameof(obj.RotationAngleInDegrees)).Any())
             {
-                // Centerpoint is not needed if Scale or Rotation are not used.
+                // Centerpoint and RotationAxis is not needed if Scale or Rotation are not used.
                 obj.CenterPoint = null;
+                obj.RotationAxis = null;
             }
 
             // Convert the properties to a transform matrix. This can reduce the
@@ -617,6 +621,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             }
         }
 
+        // Removes a container shape, copying its shapes into its parent.
+        // Does nothing if the container has no parent.
         static void ElideContainerShape(ObjectGraph<Node> graph, CompositionContainerShape container)
         {
             // Insert the children into the parent.
@@ -633,16 +639,14 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             var index = parent.Shapes.IndexOf(container);
 
             // Get the children from the container.
-            var children = container.Shapes.ToArray();
-            if (children.Length == 0)
+            var children = container.Shapes;
+
+            if (children.Count == 0)
             {
                 // The container has no children. This is rare but can happen if
                 // the container is for a layer type that we don't support.
                 return;
             }
-
-            // Remove the children from the container.
-            container.Shapes.Clear();
 
             // Insert the first child where the container was.
             var child0 = children[0];
@@ -655,7 +659,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             graph[child0].Parent = (CompositionObject)parent;
 
             // Insert the rest of the children.
-            for (var n = 1; n < children.Length; n++)
+            for (var n = 1; n < children.Count; n++)
             {
                 var childN = children[n];
 
@@ -666,11 +670,70 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 // Fix the parent pointer in the graph.
                 graph[childN].Parent = (CompositionObject)parent;
             }
+
+            // Remove the children from the container.
+            container.Shapes.Clear();
         }
 
-        // Find ContainerShapes that do not have a Transform set, with a single child that has
-        // only its Transform set and pulls the child into the parent. This is OK to do
-        // because the Transform will still be evaluated as if it is lower in the tree.
+        // Removes a container visual, copying its children into its parent.
+        // Does nothing if the container has no parent.
+        static bool TryElideContainerVisual(ObjectGraph<Node> graph, ContainerVisual container)
+        {
+            // Insert the children into the parent.
+            var parent = (ContainerVisual)graph[container].Parent;
+            if (parent == null)
+            {
+                // The container may have already been removed, or it might be a root.
+                return false;
+            }
+
+            // Find the index in the parent of the container.
+            // If childCount is 1, just replace the the container in the parent.
+            // If childCount is >1, insert into the parent.
+            var index = parent.Children.IndexOf(container);
+
+            // Get the children from the container.
+            var children = container.Children;
+
+            if (container.Children.Count == 0)
+            {
+                // The container has no children. This is rare but can happen if
+                // the container is for a layer type that we don't support.
+                return true;
+            }
+
+            // Insert the first child where the container was.
+            var child0 = children[0];
+
+            CopyDescriptions(container, child0);
+
+            parent.Children[index] = child0;
+
+            // Fix the parent pointer in the graph.
+            graph[child0].Parent = parent;
+
+            // Insert the rest of the children.
+            for (var n = 1; n < children.Count; n++)
+            {
+                var childN = children[n];
+
+                CopyDescriptions(container, childN);
+
+                parent.Children.Insert(index + n, childN);
+
+                // Fix the parent pointer in the graph.
+                graph[childN].Parent = parent;
+            }
+
+            // Remove the children from the container.
+            container.Children.Clear();
+
+            return true;
+        }
+
+        // Finds ContainerShapes that only has it's Transform set, with a single child that
+        // does not have its Transform set and pulls the child into the parent. This is OK to do
+        // because the Transform will still be evaluated as if it is higher in the tree.
         static void CoalesceContainerShapes2(ObjectGraph<Node> graph)
         {
             var containerShapes = graph.CompositionObjectNodes.Where(n =>
@@ -695,8 +758,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 var parentProperties = GetNonDefaultProperties(parent);
                 var childProperties = GetNonDefaultProperties(child);
 
-                if (childProperties == PropertyId.TransformMatrix &&
-                    (parentProperties & PropertyId.TransformMatrix) == PropertyId.None)
+                if (parentProperties == PropertyId.TransformMatrix &&
+                    (childProperties & PropertyId.TransformMatrix) == PropertyId.None)
                 {
                     if (child.Animators.Any())
                     {
@@ -704,8 +767,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                         continue;
                     }
 
-                    // Copy the Transform from the child into the parent and move child's children into the parent.
-                    parent.TransformMatrix = child.TransformMatrix;
+                    TransferShapeProperties(child, parent);
 
                     // Move the child's children into the parent.
                     ElideContainerShape(graph, child);
@@ -957,6 +1019,12 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             foreach (var (_, obj) in containersWithASingleContainer)
             {
                 var parent = (ContainerVisual)obj;
+                if (parent.Children.Count != 1)
+                {
+                    // The previous iteration of the loop modified the Children list.
+                    continue;
+                }
+
                 var child = (ContainerVisual)parent.Children[0];
 
                 var parentProperties = GetNonDefaultProperties(parent);
@@ -968,19 +1036,28 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 if (ArePropertiesOrthogonal(parentProperties, childProperties) &&
                     (childProperties & PropertyId.Properties) == PropertyId.None)
                 {
-                    // Move the children of the child into the parent, and set the child's
-                    // properties and animations on the parent.
-                    parent.Children.Clear();
-                    foreach (var ch in child.Children)
+                    if (IsVisualSurfaceRoot(graph, parent))
                     {
-                        parent.Children.Add(ch);
+                        // VisualSurface roots are special - they ignore their transforming properties
+                        // so such properties cannot be hoisted from the child.
+                        continue;
                     }
 
-                    // Copy the values of the non-default properties from the child to the parent.
-                    TransferContainerVisualProperties(child, parent);
+                    // Move the children of the child into the parent, and set the child's
+                    // properties and animations on the parent.
+                    if (TryElideContainerVisual(graph, child))
+                    {
+                        TransferContainerVisualProperties(from: child, to: parent);
+                    }
                 }
             }
         }
+
+        // True iff the given ContainerVisual is the SourceVisual of a CompositionVisualSurface.
+        // In this case the transforming properties (e.g. offset) will be ignored, so it is not
+        // safe to hoist any such properties from its child.
+        static bool IsVisualSurfaceRoot(ObjectGraph<Node> graph, ContainerVisual containerVisual)
+         => graph[containerVisual].InReferences.Any(vertex => vertex.Node.Object is CompositionVisualSurface);
 
         static bool ArePropertiesOrthogonal(PropertyId parent, PropertyId child)
         {
@@ -1000,9 +1077,12 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 return true;
             }
 
-            // Evaluation order is Offset, Rotation, Scale, Transform.
-            if (((parent & PropertyId.TransformMatrix) != PropertyId.None) &&
-                ((child & (PropertyId.Offset | PropertyId.RotationAngleInDegrees | PropertyId.Scale | PropertyId.Clip)) != PropertyId.None))
+            // Evaluation order is TransformMatrix, Offset, Rotation, Scale. So if the
+            // child has a transform it can not be pulled into the parent if the parent
+            // has offset, rotation, scale, clip, or centerpoint because it would cause
+            // the transform to be evaluated too early.
+            if (((child & PropertyId.TransformMatrix) != PropertyId.None) &&
+                ((parent & (PropertyId.Offset | PropertyId.RotationAngleInDegrees | PropertyId.Scale | PropertyId.Clip | PropertyId.CenterPoint)) != PropertyId.None))
             {
                 return false;
             }
@@ -1053,15 +1133,18 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 if (ArePropertiesOrthogonal(parentProperties, childProperties) &&
                     (parentProperties & PropertyId.Properties) == PropertyId.None)
                 {
-                    // Move the child into the parent of the parent.
-                    var grandParent = (ContainerVisual)node.Parent;
-
-                    var indexInGrandParent = grandParent.Children.IndexOf(parent);
-                    grandParent.Children.RemoveAt(indexInGrandParent);
-                    grandParent.Children.Insert(indexInGrandParent, child);
+                    if (IsVisualSurfaceRoot(graph, parent))
+                    {
+                        // VisualSurface roots are special - they ignore their transforming properties
+                        // so such properties cannot be hoisted from the child.
+                        continue;
+                    }
 
                     // Copy the values of the non-default properties from the parent to the child.
-                    TransferContainerVisualProperties(parent, child);
+                    if (TryElideContainerVisual(graph, parent))
+                    {
+                        TransferContainerVisualProperties(from: parent, to: child);
+                    }
                 }
             }
         }
@@ -1140,6 +1223,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 to.Comment = from.Comment;
             }
 
+            if (from.IsVisible.HasValue)
+            {
+                to.IsVisible = from.IsVisible;
+            }
+
             if (from.Offset.HasValue)
             {
                 to.Offset = from.Offset;
@@ -1205,7 +1293,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             Clip = CenterPoint << 1,
             Color = Clip << 1,
             Comment = Color << 1,
-            Offset = Comment << 1,
+            IsVisible = Comment << 1,
+            Offset = IsVisible << 1,
             Opacity = Offset << 1,
             Path = Opacity << 1,
             Position = Path << 1,
@@ -1228,6 +1317,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 "Clip" => PropertyId.Clip,
                 "Color" => PropertyId.Color,
                 "Comment" => PropertyId.Comment,
+                "IsVisible" => PropertyId.IsVisible,
                 "Offset" => PropertyId.Offset,
                 "Opacity" => PropertyId.Opacity,
                 "Path" => PropertyId.Path,

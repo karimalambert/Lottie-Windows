@@ -174,6 +174,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
         // Returns an easing function that steps immediately to its final value.
         internal StepEasingFunction CreateStepThenHoldEasingFunction() => _jumpStepEasingFunction;
 
+        internal BooleanKeyFrameAnimation CreateBooleanKeyFrameAnimation() => _compositor.CreateBooleanKeyFrameAnimation();
+
         internal ScalarKeyFrameAnimation CreateScalarKeyFrameAnimation() => _compositor.CreateScalarKeyFrameAnimation();
 
         internal ColorKeyFrameAnimation CreateColorKeyFrameAnimation()

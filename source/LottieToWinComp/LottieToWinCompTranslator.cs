@@ -1084,31 +1084,24 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             {
                 // Insert a new node to control visibility at the top of the chain.
                 var visibilityNode = _c.CreateContainerVisual();
-
-                if (_addDescriptions)
-                {
-                    Describe(visibilityNode, $"Visibility for layer: {context.Layer.Name}");
-                }
-
                 visibilityNode.Children.Add(root);
                 root = visibilityNode;
 
-                // Animate opacity between 0 and 1.
-                var visibilityAnimation = _c.CreateScalarKeyFrameAnimation();
+                var visibilityAnimation = _c.CreateBooleanKeyFrameAnimation();
                 if (inProgress > 0)
                 {
                     // Set initial value to be non-visible.
-                    visibilityNode.Opacity = 0;
-                    visibilityAnimation.InsertKeyFrame(inProgress, 1, _c.CreateHoldThenStepEasingFunction());
+                    visibilityNode.IsVisible = false;
+                    visibilityAnimation.InsertKeyFrame(inProgress, true);
                 }
 
                 if (outProgress < 1)
                 {
-                    visibilityAnimation.InsertKeyFrame(outProgress, 0, _c.CreateHoldThenStepEasingFunction());
+                    visibilityAnimation.InsertKeyFrame(outProgress, false);
                 }
 
                 visibilityAnimation.Duration = _lc.Duration;
-                StartKeyframeAnimation(visibilityNode, "Opacity", visibilityAnimation);
+                StartKeyframeAnimation(visibilityNode, "IsVisible", visibilityAnimation);
             }
         }
 
