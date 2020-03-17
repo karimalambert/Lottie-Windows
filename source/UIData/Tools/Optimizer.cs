@@ -45,7 +45,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             AssertGraphsAreDisjoint(result, root);
 
             // Try to optimize away redundant containers.
-            result = TreeReducer.OptimizeContainers(result);
+            result = GraphCompactor.OptimizeContainers(result);
 
             return result;
         }

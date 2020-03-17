@@ -4,7 +4,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
 using System.Numerics;
 using System.Text;
@@ -16,7 +15,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
     /// Optimizes a <see cref="Visual"/> tree by combining and removing containers and
     /// removing containers that are empty.
     /// </summary>
-    static class TreeReducer
+    static class GraphCompactor
     {
         internal static Visual OptimizeContainers(Visual root)
         {
@@ -92,7 +91,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                  let parent = (IContainShapes)pair.Node.Parent
                  select (node: pair.Node, container: (CompositionContainerShape)pair.Object, parent)).ToArray();
 
-            /*PushShapeVisibilityUp(graph);*/
+            CoalesceSiblingContainerShapes(graph);
             ElideEmptyContainerShapes(graph, containerShapes);
             ElideStructuralContainerShapes(graph, containerShapes);
             PushContainerShapeTransformsDown(graph, containerShapes);
@@ -100,16 +99,16 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             PushPropertiesDownToSpriteShape(graph, containerShapes);
         }
 
-        // Finds ContainerShapes that only exist to control visibility and if there are multiple of
-        // them at the same level, replace them with a single ContainerShape.
-        static void PushShapeVisibilityUp(ObjectGraph<Node> graph)
+        // Finds sibling shape containers that has the same properties and combines them.
+        static void CoalesceSiblingContainerShapes(ObjectGraph<Node> graph)
         {
-            var children1 = graph.CompositionObjectNodes.Where(n =>
+            // Find the IContainShapes that have 1 or more children.
+            var containersWith1OrMoreChildren = graph.CompositionObjectNodes.Where(n =>
                 n.Object is IContainShapes shapeContainer &&
                 shapeContainer.Shapes.Count > 1
             ).ToArray();
 
-            foreach (var ch in children1)
+            foreach (var ch in containersWith1OrMoreChildren)
             {
                 var container = (IContainShapes)ch.Object;
                 var grouped = GroupSimilarChildContainers(container).ToArray();
@@ -120,23 +119,30 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     container.Shapes.Clear();
                     foreach (var group in grouped)
                     {
-                        var first = group[0];
-                        container.Shapes.Add(first);
+                        // Add the first item from the group.
+                        container.Shapes.Add(group[0]);
+                        graph[group[0]].Parent = (CompositionObject)container;
 
                         if (group.Length > 1)
                         {
+                            // If there is more than 1 item in the group then they are all containers
+                            // and they are all equivalent.
+                            // Add the contents of the other containers into the first container.
+                            var first = (CompositionContainerShape)group[0];
+
                             // All of the items in the group will share the first container.
-                            var firstContainer = (CompositionContainerShape)first;
                             for (var i = 1; i < group.Length; i++)
                             {
-                                // Move the first child of each of the other containers into this container.
+                                // Move the children of each of the other containers into this container.
                                 var groupI = (CompositionContainerShape)group[i];
 
-                                // Check the the child still exists - it may have been elided already.
-                                if (groupI.Shapes.Count > 0)
+                                foreach (var shape in groupI.Shapes)
                                 {
-                                    firstContainer.Shapes.Add(groupI.Shapes[0]);
+                                    first.Shapes.Add(shape);
+                                    graph[shape].Parent = first;
                                 }
+
+                                groupI.Shapes.Clear();
                             }
                         }
                     }
@@ -154,17 +160,20 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 {
                     if (grouped.Count > 0)
                     {
+                        // Output the group so far.
                         yield return grouped.ToArray();
                         grouped.Clear();
                     }
 
+                    // Output a group with only one item - the shape that is not a container.
                     yield return new[] { child };
                 }
                 else
                 {
-                    // It's a container.
+                    // The shape is a container.
                     if (grouped.Count == 0)
                     {
+                        // Start a new group.
                         grouped.Add(childContainer);
                     }
                     else
@@ -187,6 +196,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
             if (grouped.Count > 0)
             {
+                // Output the final group.
                 yield return grouped.ToArray();
             }
         }
@@ -867,12 +877,12 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             ).ToArray();
 
             // Pull the children of the container into the parent of the container. Remove the unnecessary containers.
-            foreach (var (Node, Object) in containersWithNoPropertiesSet)
+            foreach (var (node, obj) in containersWithNoPropertiesSet)
             {
-                var container = (ContainerVisual)Object;
+                var container = (ContainerVisual)obj;
 
                 // Insert the children into the parent.
-                var parent = (ContainerVisual)Node.Parent;
+                var parent = (ContainerVisual)node.Parent;
                 if (parent == null)
                 {
                     // The container may have already been removed, or it might be a root.
