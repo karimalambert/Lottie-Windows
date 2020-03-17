@@ -5,14 +5,12 @@
 // Use the simple algorithm for combining trim paths. We're not sure of the correct semantics
 // for multiple trim paths, so it's possible this is actually the most correct.
 #define SimpleTrimPathCombining
-#define SpatialBeziers
 
 // NOTE: The AnimationController.Progress value is used one frame later than expressions,
 // so to keep everything in sync if one animation is using a controller tied
 // to the uber Progress property, then no animation can be tied to the Progress
 // property without going through a controller.
 
-//#define LinearEasingOnSpatialBeziers
 // Use Win2D to create paths from geometry combines when merging shape layers.
 //#define PreCombineGeometries
 #if DEBUG
@@ -80,6 +78,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
         readonly uint _targetUapVersion;
 
+        // Factory used for creating properties that map from the Progress value of the animated visual
+        // to another value. These are used to create properties that are required by cubic bezier
+        // expressions used for spatial beziers.
+        readonly ProgressMapFactory _progressMapFactory;
+
         // Property set used for property bindings for themed Lotties.
         CompositionPropertySet _themePropertySet;
 
@@ -111,6 +114,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             _issues = new TranslationIssues(strictTranslation);
             _addDescriptions = addDescriptions;
             _translatePropertyBindings = translatePropertyBindings;
+            _progressMapFactory = new ProgressMapFactory(lottieComposition.Duration);
 
             // Create the root.
             _rootVisual = _c.CreateContainerVisual();
@@ -194,9 +198,31 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
         {
             var context = new TranslationContext.Root(_lc);
             AddTranslatedLayersToContainerVisual(_rootVisual, context, compositionDescription: "Root");
+
+            AddRemappedProgressAnimations();
+
             if (_lc.Is3d)
             {
                 _issues.ThreeDIsNotSupported();
+            }
+        }
+
+        // Adds the progress remapping variables and animations that are needed for spatial beziers.
+        void AddRemappedProgressAnimations()
+        {
+            foreach (var (name, scale, offset, keyframes) in _progressMapFactory.GetVariables())
+            {
+                _rootVisual.Properties.InsertScalar(name, 0);
+                var animation = _c.CreateScalarKeyFrameAnimation();
+                animation.Duration = _lc.Duration;
+                animation.SetReferenceParameter(RootName, _rootVisual);
+                foreach (var keyframe in keyframes)
+                {
+                    animation.InsertKeyFrame(keyframe.rangeStart, 0, _c.CreateStepThenHoldEasingFunction());
+                    animation.InsertKeyFrame(keyframe.rangeEnd, 1, _c.CreateCompositionEasingFunction(keyframe.easing));
+                }
+
+                StartKeyframeAnimation(_rootVisual.Properties, name, animation, scale, offset);
             }
         }
 
@@ -259,7 +285,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                     // TODO - if the shape graphs share the same opacity and/or visiblity, get them
                     //        to translate without opacity/visiblity and we'll pull those
                     //        into the Visual.
-                    var shapeVisual = _c.CreateShapeVisualWithChild(compositionShapes[0].subgraph.GetShapeRoot(), context.Size);
+                    var shapeVisual = _c.CreateShapeVisualWithChild(compositionShapes[0].shape, context.Size);
 
                     if (_addDescriptions)
                     {
@@ -268,7 +294,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
                     for (var i = 1; i < compositionShapes.Length; i++)
                     {
-                        shapeVisual.Shapes.Add(compositionShapes[i].subgraph.GetShapeRoot());
+                        shapeVisual.Shapes.Add(compositionShapes[i].shape);
                     }
 
                     return shapeVisual;
@@ -4103,8 +4129,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             var previousProgress = Float32.PreviousSmallerThan(0);
             var rootReferenceRequired = false;
             var previousKeyFrameWasExpression = false;
-            string progressMappingProperty = null;
-            ScalarKeyFrameAnimation progressMappingAnimation = null;
 
             foreach (var keyFrame in trimmedKeyFrames)
             {
@@ -4128,22 +4152,12 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                     {
                         case Easing.EasingType.Linear:
                         case Easing.EasingType.CubicBezier:
-                            if (progressMappingProperty == null)
-                            {
-                                progressMappingProperty = $"t{_tCounter++}";
-                                progressMappingAnimation = _c.CreateScalarKeyFrameAnimation();
-                                progressMappingAnimation.Duration = _lc.Duration;
-                            }
-#if LinearEasingOnSpatialBeziers
-                            cb = CubicBezierFunction.Create(cp0, (cp0 + cp1), (cp2 + cp3), cp3, GetRemappedProgress(previousProgress, adjustedProgress));
-#else
                             cb = CubicBezierFunction2.Create(
                                 cp0,
                                 cp0 + cp1,
                                 cp2 + cp3,
                                 cp3,
-                                Expr.Scalar($"{RootName}.{progressMappingProperty}"));
-#endif
+                                Expr.Scalar("dummy"));
                             break;
                         case Easing.EasingType.Hold:
                             // Holds should never have interesting cubic beziers, so replace with one that is definitely colinear.
@@ -4153,11 +4167,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                             throw new InvalidOperationException();
                     }
 
-                    if (cb.IsEquivalentToLinear || adjustedProgress == 0
-#if !SpatialBeziers
-                        || true
-#endif
-                        )
+                    if (cb.IsEquivalentToLinear || adjustedProgress == 0)
                     {
                         // The cubic bezier function is equivalent to a line, or its value starts at the start of the animation, so no need
                         // for an expression to do spatial beziers on it. Just use a regular key frame.
@@ -4184,18 +4194,26 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                         // to add won't get evaluated during the following segment.
                         if ((float)adjustedProgress > 0)
                         {
-                            Float32.PreviousSmallerThan((float)adjustedProgress);
+                            adjustedProgress = Float32.PreviousSmallerThan((float)adjustedProgress);
                         }
 
-#if !LinearEasingOnSpatialBeziers
-                        // Add an animation to map from progress to t over the range of this key frame.
-                        if (previousProgress > 0)
+                        if ((float)previousProgress > 0)
                         {
-                            progressMappingAnimation.InsertKeyFrame(Float32.NextLargerThan(previousProgress), 0, _c.CreateStepThenHoldEasingFunction());
+                            previousProgress = Float32.NextLargerThan((float)previousProgress);
                         }
 
-                        progressMappingAnimation.InsertKeyFrame((float)adjustedProgress, 1, _c.CreateCompositionEasingFunction(keyFrame.Easing));
-#endif
+                        // Re-create the cubic bezier using the real variable name (it was created previously just to
+                        // see if it was linear).
+                        cb = CubicBezierFunction2.Create(
+                            cp0,
+                            cp0 + cp1,
+                            cp2 + cp3,
+                            cp3,
+                            RootScalar(_progressMapFactory.GetVariableForProgressMapping((float)previousProgress, (float)adjustedProgress, keyFrame.Easing, scale, offset)));
+
+                        // Insert the cubic bezier expression. The easing has to be a StepThenHold because otherwise
+                        // the value will be interpolated between the result of the expression, and the previous
+                        // key frame value. The StepThenHold will make it just evaluate the expression.
                         insertExpressionKeyFrame(
                             compositionAnimation,
                             (float)adjustedProgress,
@@ -4241,13 +4259,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
             // Start the animation scaled and offset.
             StartKeyframeAnimation(targetObject, targetPropertyName, compositionAnimation, scale, offset);
-
-            // Start the animation that maps from the Progress property to a t value for use by the spatial beziers.
-            if (progressMappingAnimation != null && progressMappingAnimation.KeyFrameCount > 0)
-            {
-                _rootVisual.Properties.InsertScalar(progressMappingProperty, 0);
-                StartKeyframeAnimation(_rootVisual, progressMappingProperty, progressMappingAnimation, scale, offset);
-            }
         }
 
         float GetInPointProgress(TranslationContext context)

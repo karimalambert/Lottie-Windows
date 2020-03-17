@@ -31,7 +31,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
         static readonly Scalar MyTEnd = MyScalar("TEnd");
 
         // An expression that refers to the name of the root property set and the Progress property on it.
-        internal static readonly Scalar RootProgress = Scalar(RootProperty(LottieToWinCompTranslator.ProgressPropertyName));
+        internal static readonly Scalar RootProgress = RootScalar(LottieToWinCompTranslator.ProgressPropertyName);
         internal static readonly Scalar MaxTStartTEnd = Max(MyTStart, MyTEnd);
         internal static readonly Scalar MinTStartTEnd = Min(MyTStart, MyTEnd);
         static readonly Vector2 HalfMySize = MySize / Vector2(2, 2);
@@ -64,6 +64,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
         internal static Vector2 HalfSizeToOffsetExpression(Sn.Vector2 halfSize) => MyPosition - Vector2(halfSize);
 
         internal static Vector2 PositionToOffsetExpression(Sn.Vector2 position) => Vector2(position) - HalfMySize;
+
+        internal static Scalar RootScalar(string propertyName) => Scalar(RootProperty(propertyName));
 
         // The value of a Color property stored as a Vector4 on the theming property set.
         static Vector4 ThemedColor4Property(string propertyName) => Vector4(ThemeProperty(propertyName));

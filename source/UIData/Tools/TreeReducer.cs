@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Numerics;
 using System.Text;
@@ -64,22 +65,44 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 }
             }
 
-            RemoveTransparentShapes(graph);
-            RemoveEmptyContainers(graph);
-            CoalesceContainerShapes(graph);
-            CoalesceContainerShapes2(graph);
-            CoalesceContainerShapes3(graph);
+            SimplifyProperties(graph);
+            OptimizeShapes(graph);
+            OptimizeVisuals(graph);
+        }
+
+        static void OptimizeVisuals(ObjectGraph<Node> graph)
+        {
             CoalesceContainerVisuals(graph);
             CoalesceOrthogonalVisuals(graph);
             CoalesceOrthogonalContainerVisuals(graph);
             RemoveRedundantInsetClipVisuals(graph);
-            PushSharedVisiblityUp(graph);
-            SimplifyProperties(graph);
+        }
+
+        static void OptimizeShapes(ObjectGraph<Node> graph)
+        {
+            ElideTransparentSpriteShapes(graph);
+            OptimizeContainerShapes(graph);
+        }
+
+        static void OptimizeContainerShapes(ObjectGraph<Node> graph)
+        {
+            var containerShapes =
+                (from pair in graph.CompositionObjectNodes
+                 where pair.Object.Type == CompositionObjectType.CompositionContainerShape
+                 let parent = (IContainShapes)pair.Node.Parent
+                 select (node: pair.Node, container: (CompositionContainerShape)pair.Object, parent)).ToArray();
+
+            /*PushShapeVisibilityUp(graph);*/
+            ElideEmptyContainerShapes(graph, containerShapes);
+            ElideStructuralContainerShapes(graph, containerShapes);
+            PushContainerShapeTransformsDown(graph, containerShapes);
+            CoalesceContainerShapes2(graph, containerShapes);
+            PushPropertiesDownToSpriteShape(graph, containerShapes);
         }
 
         // Finds ContainerShapes that only exist to control visibility and if there are multiple of
         // them at the same level, replace them with a single ContainerShape.
-        static void PushSharedVisiblityUp(ObjectGraph<Node> graph)
+        static void PushShapeVisibilityUp(ObjectGraph<Node> graph)
         {
             var children1 = graph.CompositionObjectNodes.Where(n =>
                 n.Object is IContainShapes shapeContainer &&
@@ -107,7 +130,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                             for (var i = 1; i < group.Length; i++)
                             {
                                 // Move the first child of each of the other containers into this container.
-                                firstContainer.Shapes.Add(((CompositionContainerShape)group[i]).Shapes[0]);
+                                var groupI = (CompositionContainerShape)group[i];
+
+                                // Check the the child still exists - it may have been elided already.
+                                if (groupI.Shapes.Count > 0)
+                                {
+                                    firstContainer.Shapes.Add(groupI.Shapes[0]);
+                                }
                             }
                         }
                     }
@@ -501,7 +530,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             return brush == null || (!brush.Animators.Any() && (brush as CompositionColorBrush)?.Color?.A == 0);
         }
 
-        static void RemoveTransparentShapes(ObjectGraph<Node> graph)
+        static void ElideTransparentSpriteShapes(ObjectGraph<Node> graph)
         {
             var transparentShapes =
                 (from pair in graph.CompositionObjectNodes
@@ -517,13 +546,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
         }
 
         // Removes any CompositionContainerShapes that have no children.
-        static void RemoveEmptyContainers(ObjectGraph<Node> graph)
+        static void ElideEmptyContainerShapes(
+            ObjectGraph<Node> graph,
+            (Node node, CompositionContainerShape container, IContainShapes parent)[] containerShapes)
         {
-            var containerNodes =
-                (from pair in graph.CompositionObjectNodes
-                 where pair.Object.Type == CompositionObjectType.CompositionContainerShape
-                 select (container: (CompositionContainerShape)pair.Object, parent: (IContainShapes)pair.Node.Parent)).ToArray();
-
             // Keep track of which containers were removed so we don't consider them again.
             var removed = new HashSet<CompositionContainerShape>();
 
@@ -531,52 +557,56 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             for (var madeProgress = true; madeProgress;)
             {
                 madeProgress = false;
-                foreach (var (Container, Parent) in containerNodes)
+                foreach (var (_, container, parent) in containerShapes)
                 {
-                    if (!removed.Contains(Container) && Container.Shapes.Count == 0)
+                    if (!removed.Contains(container) && container.Shapes.Count == 0)
                     {
                         // Indicate that we successfully removed a container.
                         madeProgress = true;
 
                         // Remove the empty container.
-                        Parent.Shapes.Remove(Container);
+                        parent.Shapes.Remove(container);
 
                         // Don't look at the removed object again.
-                        removed.Add(Container);
+                        removed.Add(container);
                     }
                 }
             }
         }
 
-        static void CoalesceContainerShapes(ObjectGraph<Node> graph)
+        static void PushContainerShapeTransformsDown(
+            ObjectGraph<Node> graph,
+            (Node node, CompositionContainerShape container, IContainShapes parent)[] containerShapes)
         {
-            var containerShapes = graph.CompositionObjectNodes.Where(n => n.Object.Type == CompositionObjectType.CompositionContainerShape).ToArray();
-
             // If a container is not animated and has no other properties set apart from a transform,
-            // and all of its children are also not animated and have no other properties set apart
-            // from a transform, the transform can be pushed down to the child, allowing the parent to be removed.
+            // and all of its children do not have an animated transform, the transform can be pushed down to
+            // each child, and the container can be removed.
+            // Note that this is safe because TransformMatrix effectively sits above all transforming
+            // properties, so after pushing it down it will still be above all transforming properties.
             var elidableContainers = containerShapes.Where(n =>
             {
-                var container = (CompositionContainerShape)n.Object;
-                if (container.Properties.Names.Count > 0 ||
-                    container.Animators.Count > 0 ||
-                    container.CenterPoint != null ||
-                    container.Offset != null ||
-                    container.RotationAngleInDegrees != null ||
-                    container.Scale != null)
+                var container = n.container;
+                var containerProperties = GetNonDefaultProperties(container);
+
+                if (container.Shapes.Count == 0)
                 {
+                    // Ignore empty containers.
+                    return false;
+                }
+
+                if (container.Animators.Count != 0 || (containerProperties & ~PropertyId.TransformMatrix) != PropertyId.None)
+                {
+                    // Ignore this container if it has animators or anything other than the transform is set.
                     return false;
                 }
 
                 foreach (var child in container.Shapes)
                 {
-                    if (child.Properties.Names.Count > 0 ||
-                        child.Animators.Count > 0 ||
-                        child.CenterPoint != null ||
-                        child.Offset != null ||
-                        child.RotationAngleInDegrees != null ||
-                        child.Scale != null)
+                    var childProperties = GetNonDefaultProperties(child);
+
+                    if (child.Animators.Where(a => a.AnimatedProperty == "TransformMatrix").Any())
                     {
+                        // Ignore this container if any of the children has an animated transform.
                         return false;
                     }
                 }
@@ -585,9 +615,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             });
 
             // Push the transform down to the child.
-            foreach (var node in elidableContainers)
+            foreach (var (_, container, _) in elidableContainers)
             {
-                var container = (CompositionContainerShape)node.Object;
                 foreach (var child in container.Shapes)
                 {
                     // Push the transform down to the child
@@ -597,22 +626,22 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     }
                 }
 
-                // Remove the transform from the container.
-                container.TransformMatrix = null;
+                // Remove the container.
+                ElideContainerShape(graph, container);
             }
+        }
 
+        static void ElideStructuralContainerShapes(
+            ObjectGraph<Node> graph,
+            (Node node, CompositionContainerShape container, IContainShapes parent)[] containerShapes)
+        {
             // If a container is not animated and has no properties set, its children can be inserted into its parent.
             var containersWithNoPropertiesSet = containerShapes.Where(n =>
             {
-                var container = (CompositionContainerShape)n.Object;
-                if (container.Type != CompositionObjectType.CompositionContainerShape ||
-                    container.CenterPoint != null ||
-                    container.Offset != null ||
-                    container.RotationAngleInDegrees != null ||
-                    container.Scale != null ||
-                    container.TransformMatrix != null ||
-                    container.Animators.Count > 0 ||
-                    container.Properties.Names.Count > 0)
+                var container = n.container;
+                var containerProperties = GetNonDefaultProperties(container);
+
+                if (container.Animators.Count != 0 || containerProperties != PropertyId.None)
                 {
                     return false;
                 }
@@ -621,9 +650,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 return true;
             }).ToArray();
 
-            foreach (var (_, Object) in containersWithNoPropertiesSet)
+            foreach (var (_, container, _) in containersWithNoPropertiesSet)
             {
-                var container = (CompositionContainerShape)Object;
                 ElideContainerShape(graph, container);
             }
         }
@@ -644,6 +672,12 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             // If childCount is 1, just replace the the container in the parent.
             // If childCount is >1, insert into the parent.
             var index = parent.Shapes.IndexOf(container);
+
+            if (index == -1)
+            {
+                // Container has already been removed.
+                return;
+            }
 
             // Get the children from the container.
             var children = container.Shapes;
@@ -741,28 +775,26 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
         // Finds ContainerShapes that only has it's Transform set, with a single child that
         // does not have its Transform set and pulls the child into the parent. This is OK to do
         // because the Transform will still be evaluated as if it is higher in the tree.
-        static void CoalesceContainerShapes2(ObjectGraph<Node> graph)
+        static void CoalesceContainerShapes2(
+            ObjectGraph<Node> graph,
+            (Node node, CompositionContainerShape container, IContainShapes parent)[] containerShapes)
         {
-            var containerShapes = graph.CompositionObjectNodes.Where(n =>
-                n.Object.Type == CompositionObjectType.CompositionContainerShape &&
-                n.Object is CompositionContainerShape container &&
-                container.Shapes.Count == 1 &&
-                container.Shapes[0].Type == CompositionObjectType.CompositionContainerShape
+            var containerShapesWith1Container = containerShapes.Where(n =>
+                    n.container.Shapes.Count == 1 &&
+                    n.container.Shapes[0].Type == CompositionObjectType.CompositionContainerShape
                 ).ToArray();
 
-            foreach (var (node, obj) in containerShapes)
+            foreach (var (_, container, _) in containerShapesWith1Container)
             {
-                var parent = (CompositionContainerShape)obj;
-
-                if (!parent.Shapes.Any())
+                if (!container.Shapes.Any())
                 {
                     // The children have already been removed.
                     continue;
                 }
 
-                var child = (CompositionContainerShape)parent.Shapes[0];
+                var child = (CompositionContainerShape)container.Shapes[0];
 
-                var parentProperties = GetNonDefaultProperties(parent);
+                var parentProperties = GetNonDefaultProperties(container);
                 var childProperties = GetNonDefaultProperties(child);
 
                 if (parentProperties == PropertyId.TransformMatrix &&
@@ -774,7 +806,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                         continue;
                     }
 
-                    TransferShapeProperties(child, parent);
+                    TransferShapeProperties(child, container);
 
                     // Move the child's children into the parent.
                     ElideContainerShape(graph, child);
@@ -784,28 +816,26 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
         // Find ContainerShapes that have a single SpriteShape with orthongonal properties
         // and remove the ContainerShape.
-        static void CoalesceContainerShapes3(ObjectGraph<Node> graph)
+        static void PushPropertiesDownToSpriteShape(
+            ObjectGraph<Node> graph,
+            (Node node, CompositionContainerShape container, IContainShapes parent)[] containerShapes)
         {
-            var containerShapes = graph.CompositionObjectNodes.Where(n =>
-                n.Object.Type == CompositionObjectType.CompositionContainerShape &&
-                n.Object is CompositionContainerShape container &&
-                container.Shapes.Count == 1 &&
-                container.Shapes[0].Type == CompositionObjectType.CompositionSpriteShape
+            var containerShapesWith1Sprite = containerShapes.Where(n =>
+                    n.container.Shapes.Count == 1 &&
+                    n.container.Shapes[0].Type == CompositionObjectType.CompositionSpriteShape
                 ).ToArray();
 
-            foreach (var (node, obj) in containerShapes)
+            foreach (var (_, container, _) in containerShapesWith1Sprite)
             {
-                var parent = (CompositionContainerShape)obj;
-
-                if (!parent.Shapes.Any())
+                if (!container.Shapes.Any())
                 {
                     // The children have already been removed.
                     continue;
                 }
 
-                var child = (CompositionSpriteShape)parent.Shapes[0];
+                var child = (CompositionSpriteShape)container.Shapes[0];
 
-                var parentProperties = GetNonDefaultProperties(parent);
+                var parentProperties = GetNonDefaultProperties(container);
                 var childProperties = GetNonDefaultProperties(child);
 
                 // Common case is that the child has no non-default properties.
@@ -819,9 +849,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     }
 
                     // Copy the parent's properties onto the child and remove the parent.
-                    TransferShapeProperties(parent, child);
+                    TransferShapeProperties(container, child);
 
-                    ElideContainerShape(graph, parent);
+                    ElideContainerShape(graph, container);
                 }
             }
         }

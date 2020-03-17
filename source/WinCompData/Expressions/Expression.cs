@@ -92,5 +92,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.Expressions
         public override sealed bool Equals(object obj) => Equals(obj as Expression);
 
         public override sealed int GetHashCode() => ToText().GetHashCode();
+
+        public static bool operator ==(Expression a, Expression b) => (a is null && b is null) || a.ToText() == b.ToText();
+
+        public static bool operator !=(Expression a, Expression b) => !(a == b);
     }
 }
