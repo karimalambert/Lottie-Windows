@@ -837,33 +837,33 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             result = CacheAndInitializeCompositionObject(obj, _c.CreateInsetClip());
 
             // CompositionClip properties
-            if (obj.CenterPoint.X != 0 || obj.CenterPoint.Y != 0)
+            if (obj.CenterPoint.HasValue && obj.CenterPoint != Vector2.Zero)
             {
                 result.CenterPoint = obj.CenterPoint;
             }
 
-            if (obj.Scale.X != 1 || obj.Scale.Y != 1)
+            if (obj.Scale.HasValue && obj.Scale != Vector2.One)
             {
                 result.Scale = obj.Scale;
             }
 
             // InsetClip properties
-            if (obj.LeftInset != 0)
+            if (obj.LeftInset.HasValue && obj.LeftInset != 0)
             {
                 result.LeftInset = obj.LeftInset;
             }
 
-            if (obj.RightInset != 0)
+            if (obj.RightInset.HasValue && obj.RightInset != 0)
             {
                 result.RightInset = obj.RightInset;
             }
 
-            if (obj.TopInset != 0)
+            if (obj.TopInset.HasValue && obj.TopInset != 0)
             {
                 result.TopInset = obj.TopInset;
             }
 
-            if (obj.BottomInset != 0)
+            if (obj.BottomInset.HasValue && obj.BottomInset != 0)
             {
                 result.BottomInset = obj.BottomInset;
             }

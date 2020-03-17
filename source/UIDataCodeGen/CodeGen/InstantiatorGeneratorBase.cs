@@ -1400,11 +1400,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 }
             }
 
-            void WritePropertySetStatementDefaultIsZero(CodeBuilder builder, string propertyName, float value, string target = "result")
+            void WritePropertySetStatementDefaultIsZero(CodeBuilder builder, string propertyName, float? value, string target = "result")
             {
-                if (value != 0)
+                if (value.HasValue && value.Value != 0)
                 {
-                    WritePropertySetStatement(builder, propertyName, Float(value), target);
+                    WritePropertySetStatement(builder, propertyName, Float(value.Value), target);
                 }
             }
 
@@ -2232,14 +2232,22 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             {
                 InitializeCompositionObject(builder, obj, node);
 
-                if (obj.CenterPoint.X != 0 || obj.CenterPoint.Y != 0)
+                if (obj.CenterPoint.HasValue)
                 {
-                    WritePropertySetStatement(builder, "CenterPoint", obj.CenterPoint);
+                    var centerPoint = obj.CenterPoint.Value;
+                    if (centerPoint != Sn.Vector2.Zero)
+                    {
+                        WritePropertySetStatement(builder, "CenterPoint", obj.CenterPoint);
+                    }
                 }
 
-                if (obj.Scale.X != 1 || obj.Scale.Y != 1)
+                if (obj.Scale.HasValue)
                 {
-                    WritePropertySetStatement(builder, "Scale", obj.Scale);
+                    var scale = obj.Scale.Value;
+                    if (scale != Sn.Vector2.One)
+                    {
+                        WritePropertySetStatement(builder, "Scale", obj.Scale);
+                    }
                 }
             }
 
