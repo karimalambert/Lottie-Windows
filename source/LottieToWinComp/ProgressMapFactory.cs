@@ -113,8 +113,16 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                 if (cur.Next is null)
                 {
                     // Got to the end of the list. Add the range on the end.
-                    cur.Next = range;
-                    return true;
+                    if (range.Start >= cur.End)
+                    {
+                        cur.Next = range;
+                        return true;
+                    }
+                    else
+                    {
+                        // The range overlaps the last range. No room to add.
+                        return false;
+                    }
                 }
 
                 // cur.Start <= range.Start.

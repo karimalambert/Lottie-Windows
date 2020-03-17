@@ -4,10 +4,12 @@
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Numerics;
 using System.Text;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData;
+using Expr = Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.Expressions;
 
 namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 {
@@ -71,6 +73,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
         static void OptimizeVisuals(ObjectGraph<Node> graph)
         {
+            PushPropertiesDownToShapeVisual(graph);
             CoalesceContainerVisuals(graph);
             CoalesceOrthogonalVisuals(graph);
             CoalesceOrthogonalContainerVisuals(graph);
@@ -97,6 +100,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             PushContainerShapeTransformsDown(graph, containerShapes);
             CoalesceContainerShapes2(graph, containerShapes);
             PushPropertiesDownToSpriteShape(graph, containerShapes);
+            PushShapeVisbilityDown(graph, containerShapes);
         }
 
         // Finds sibling shape containers that has the same properties and combines them.
@@ -824,6 +828,94 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             }
         }
 
+        // Find ContainerVisuals that have a single ShapeVisual child with orthongonal properties and
+        // push the properties down to the ShapeVisual
+        static void PushPropertiesDownToShapeVisual(ObjectGraph<Node> graph)
+        {
+            var shapeVisualsWithSingleParents = graph.CompositionObjectNodes.Where(n =>
+                n.Object.Type == CompositionObjectType.ShapeVisual &&
+                ((ContainerVisual)n.Node.Parent).Children.Count == 1).ToArray();
+
+            foreach (var (node, obj) in shapeVisualsWithSingleParents)
+            {
+                var shapeVisual = (ShapeVisual)obj;
+                var parent = (ContainerVisual)node.Parent;
+                var parentProperties = GetNonDefaultProperties(parent);
+
+                if (parentProperties == PropertyId.None)
+                {
+                    // No properties to push down.
+                    continue;
+                }
+
+                // If the parent has no transforming properties, and a Size that
+                // is the same as the Child's size, and a 0 InsetClip and none of
+                // these properties is animated, the InsetClip and Size on the Visual
+                // are redundant and can be removed.
+                if ((parentProperties &
+                        (PropertyId.CenterPoint | PropertyId.Offset |
+                         PropertyId.RotationAngleInDegrees | PropertyId.Scale |
+                         PropertyId.TransformMatrix)) == PropertyId.None &&
+                    parent.Clip is InsetClip insetClip &&
+                    insetClip.CenterPoint == Vector2.Zero &&
+                    insetClip.Scale == Vector2.One &&
+                    insetClip.LeftInset == 0 && insetClip.RightInset == 0 &&
+                    insetClip.TopInset == 0 && insetClip.BottomInset == 0 &&
+                    insetClip.Animators.Count == 0 &&
+                    parent.Size == shapeVisual.Size &&
+                    !IsPropertyAnimated(parent, PropertyId.Size) &&
+                    !IsPropertyAnimated(shapeVisual, PropertyId.Size))
+                {
+                    parent.Clip = null;
+                    parent.Size = null;
+                }
+            }
+        }
+
+        static bool IsPropertyAnimated(CompositionObject obj, PropertyId property)
+        {
+            var propertyName = property.ToString();
+            return obj.Animators.Any(p => p.AnimatedProperty == propertyName);
+        }
+
+        // Finds container shapes that have only Scale properties set for visibility animations
+        // and pushes the scale property and animation down.
+        static void PushShapeVisbilityDown(
+                        ObjectGraph<Node> graph,
+                        (Node node, CompositionContainerShape container, IContainShapes parent)[] containerShapes)
+        {
+            var containerShapesWith1Child = containerShapes.Where(n =>
+                    n.container.Shapes.Count == 1
+                ).ToArray();
+
+            foreach (var (_, parent, _) in containerShapesWith1Child)
+            {
+                if (!parent.Shapes.Any())
+                {
+                    // The children have already been removed.
+                    continue;
+                }
+
+                var child = parent.Shapes[0];
+
+                var parentProperties = GetNonDefaultProperties(parent);
+                var childProperties = GetNonDefaultProperties(child);
+
+                if (parentProperties == PropertyId.Scale && IsScaleUsedForVisibility(parent))
+                {
+                    // The parent is only used for visibility (via its Scale property).
+                    // This can be safely pushed up or down the tree.
+                    if ((childProperties & PropertyId.Scale) == PropertyId.None)
+                    {
+                        // The child does not use Scale. Move the Scale down to the child.
+                        TransferShapeProperties(parent, child);
+
+                        ElideContainerShape(graph, parent);
+                    }
+                }
+            }
+        }
+
         // Find ContainerShapes that have a single SpriteShape with orthongonal properties
         // and remove the ContainerShape.
         static void PushPropertiesDownToSpriteShape(
@@ -835,17 +927,17 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     n.container.Shapes[0].Type == CompositionObjectType.CompositionSpriteShape
                 ).ToArray();
 
-            foreach (var (_, container, _) in containerShapesWith1Sprite)
+            foreach (var (_, parent, _) in containerShapesWith1Sprite)
             {
-                if (!container.Shapes.Any())
+                if (!parent.Shapes.Any())
                 {
                     // The children have already been removed.
                     continue;
                 }
 
-                var child = (CompositionSpriteShape)container.Shapes[0];
+                var child = (CompositionSpriteShape)parent.Shapes[0];
 
-                var parentProperties = GetNonDefaultProperties(container);
+                var parentProperties = GetNonDefaultProperties(parent);
                 var childProperties = GetNonDefaultProperties(child);
 
                 // Common case is that the child has no non-default properties.
@@ -859,11 +951,52 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     }
 
                     // Copy the parent's properties onto the child and remove the parent.
-                    TransferShapeProperties(container, child);
+                    TransferShapeProperties(parent, child);
 
-                    ElideContainerShape(graph, container);
+                    ElideContainerShape(graph, parent);
                 }
             }
+        }
+
+        static bool IsScaleUsedForVisibility(CompositionShape shape)
+        {
+            var scaleValue = shape.Scale;
+
+            if (scaleValue.HasValue && scaleValue.Value != Vector2.One && scaleValue.Value != Vector2.Zero)
+            {
+                // Scale has a value that is not invisible (0,0) and it's not identity (1,1).
+                return false;
+            }
+
+            var scaleAnimator = shape.Animators.Where(anim => anim.AnimatedProperty == "Scale").FirstOrDefault();
+
+            if (scaleAnimator is null)
+            {
+                return false;
+            }
+
+            var scaleAnimation = (Vector2KeyFrameAnimation)scaleAnimator.Animation;
+            foreach (var kf in scaleAnimation.KeyFrames)
+            {
+                if (kf.Easing.Type != CompositionObjectType.StepEasingFunction)
+                {
+                    return false;
+                }
+
+                if (kf.Type != KeyFrameType.Value)
+                {
+                    return false;
+                }
+
+                var keyFrameValue = ((KeyFrameAnimation<Vector2, Expr.Vector2>.ValueKeyFrame)kf).Value;
+
+                if (keyFrameValue != Vector2.One && keyFrameValue != Vector2.Zero)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         static void CoalesceContainerVisuals(ObjectGraph<Node> graph)
