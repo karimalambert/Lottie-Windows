@@ -131,6 +131,10 @@ sealed class Program
         // if no output folder was specified.
         var outputFolder = MakeAbsolutePath(_options.OutputFolder ?? Directory.GetCurrentDirectory());
 
+        // Get a timestamp to include in the output to help identify a particular
+        // run on the tool.
+        var timestamp = DateTime.UtcNow;
+
         // Assume success.
         var succeeded = true;
 
@@ -139,7 +143,12 @@ sealed class Program
 #if DO_NOT_PROCESS_IN_PARALLEL
             foreach (var (file, relativePath) in matchingInputFiles)
             {
-                if (!LottieFileProcessor.ProcessFile(_options, _reporter, file, System.IO.Path.Combine(outputFolder, relativePath)))
+                if (!LottieFileProcessor.ProcessFile(
+                    _options,
+                    _reporter,
+                    file,
+                    System.IO.Path.Combine(outputFolder, relativePath),
+                    timestamp))
                 {
                     succeeded = false;
                 }
@@ -147,7 +156,12 @@ sealed class Program
 #else
             Parallel.ForEach(matchingInputFiles, ((string path, string relativePath) inputFile) =>
             {
-                if (!LottieFileProcessor.ProcessFile(_options, _reporter, inputFile.path, System.IO.Path.Combine(outputFolder, inputFile.relativePath)))
+                if (!LottieFileProcessor.ProcessFile(
+                    _options,
+                    _reporter,
+                    inputFile.path,
+                    System.IO.Path.Combine(outputFolder, inputFile.relativePath),
+                    timestamp))
                 {
                     succeeded = false;
                 }

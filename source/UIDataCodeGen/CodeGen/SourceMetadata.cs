@@ -68,7 +68,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             internal double DurationInFrames => _metadata.OutPoint - _metadata.InPoint;
 
-            internal IEnumerable<(string name, (TimeSpan time, double progress) start, (TimeSpan time, double progress) end)> Markers
+            internal IEnumerable<(string name,
+                                   (TimeSpan time, double progress, double frame) start,
+                                   (TimeSpan time, double progress, double frame) end)> Markers
             {
                 get
                 {
@@ -82,7 +84,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                         var endFrame = startFrame + durationInFrames;
                         var endProgress = Clamp01(endFrame / DurationInFrames);
                         var endTime = TimeSpan.FromSeconds(endFrame / FramesPerSecond);
-                        yield return (m.Name, (startTime, startProgress), (endTime, endProgress));
+                        yield return (m.Name, (startTime, startProgress, startFrame), (endTime, endProgress, endFrame));
                     }
                 }
             }

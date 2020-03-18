@@ -391,13 +391,20 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     yield return "Segments (aka markers):";
                     foreach (var (name, start, end) in metadata.Markers)
                     {
+                        if (start.frame > metadata.DurationInFrames)
+                        {
+                            // Ignore markers that refer to frames after the end.
+                            continue;
+                        }
+
                         var durationMs = (end.time - start.time).TotalMilliseconds;
                         var duration = durationMs == 0 ? string.Empty : $"{durationMs}mS";
+                        var frames = (end.frame - start.frame) > 0 ? $"{start.frame}..{end.frame}" : start.frame.ToString();
                         var playCommand = start.time == end.time
                                 ? $"player{Deref}SetProgress({_s.Float(start.progress)})"
                                 : $"player{Deref}PlayAsync({_s.Float(start.progress)}, {_s.Float(end.progress)}, _)";
 
-                        yield return $"{String(name),-15} {duration,6} {playCommand}";
+                        yield return $"{String(name),-15} {frames,8} {duration,6} {playCommand}";
                     }
                 }
             }
@@ -410,7 +417,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             if (!_generateDependencyObject && names?.Any() == true)
             {
                 yield return "===========";
-                yield return "Property bindings:";
+                yield return "Theme property bindings:";
                 foreach (var entry in names)
                 {
                     if (entry.ActualType != entry.ExposedType)

@@ -25,6 +25,7 @@ sealed class LottieFileProcessor
     readonly Reporter _reporter;
     readonly string _file;
     readonly string _outputFolder;
+    readonly DateTime _timestamp;
     readonly uint _minimumUapVersion;
     readonly string _className;
     bool _reportedErrors;
@@ -37,12 +38,18 @@ sealed class LottieFileProcessor
     IReadOnlyList<TranslationResult> _translationResults;
     IReadOnlyList<(TranslationIssue issue, UapVersionRange versionRange)> _translationIssues;
 
-    LottieFileProcessor(CommandLineOptions options, Reporter reporter, string file, string outputFolder)
+    LottieFileProcessor(
+        CommandLineOptions options,
+        Reporter reporter,
+        string file,
+        string outputFolder,
+        DateTime timestamp)
     {
         _options = options;
         _reporter = reporter;
         _file = file;
         _outputFolder = outputFolder;
+        _timestamp = timestamp;
 
         // If no minimum UAP version is specified, use 7 as that is the lowest version that the translator supports.
         const uint defaultUapVersion = 7;
@@ -55,11 +62,16 @@ sealed class LottieFileProcessor
             InstantiatorGeneratorBase.TrySynthesizeClassName("Lottie");  // If all else fails, just call it Lottie.
     }
 
-    internal static bool ProcessFile(CommandLineOptions options, Reporter reporter, string file, string outputFolder)
+    internal static bool ProcessFile(
+        CommandLineOptions options,
+        Reporter reporter,
+        string file,
+        string outputFolder,
+        DateTime timestamp)
     {
         try
         {
-            return new LottieFileProcessor(options, reporter, file, outputFolder).Run();
+            return new LottieFileProcessor(options, reporter, file, outputFolder, timestamp).Run();
         }
         catch
         {
@@ -496,8 +508,8 @@ sealed class LottieFileProcessor
     }
 
     bool TryGenerateCXCode(
-    string outputHeaderFilePath,
-    string outputCppFilePath)
+        string outputHeaderFilePath,
+        string outputCppFilePath)
     {
         if (!TryEnsureTranslated())
         {
@@ -628,10 +640,45 @@ sealed class LottieFileProcessor
             GenerateDependencyObject = _options.GenerateDependencyObject,
             SourceMetadata = _translationResults[0].SourceMetadata,
             ObjectGraphs = _translationResults.Select(tr => ((CompositionObject)tr.RootVisual, tr.MinimumRequiredUapVersion)).ToArray(),
-            ToolInfo = _options.TestMode
-                            ? new[] { $"Command: {syntheticCommandLine}" }
-                            : new[] { $"Command: {syntheticCommandLine}", $"Version: {ThisAssembly.AssemblyInformationalVersion}" },
+            ToolInfo = GetToolInvocationInfo(languageSwitch).ToArray(),
         };
+    }
+
+    // Returns lines that describe the invocation of this tool.
+    // This information is passed to the code generator so that it can
+    // be included in the generated output.
+    IEnumerable<string> GetToolInvocationInfo(string languageSwitch)
+    {
+        var inputFile = new FileInfo(_file);
+
+        var indent = "    ";
+        if (!_options.TestMode)
+        {
+            yield return $"{ThisAssembly.AssemblyName} version:";
+            yield return $"{indent}{ThisAssembly.AssemblyInformationalVersion}";
+            yield return string.Empty;
+        }
+
+        var syntheticCommandLine =
+            $"{_options.ToConfigurationCommandLine()} -Language {languageSwitch} -InputFile {inputFile.Name}";
+
+        yield return "Command:";
+        yield return $"{indent}{syntheticCommandLine}";
+
+        yield return string.Empty;
+        yield return "Input file:";
+        yield return $"{indent}{inputFile.Name} ({inputFile.Length:g} bytes created {inputFile.CreationTimeUtc.ToLocalTime():H:mmK MMM d yyyy})";
+
+        if (!_options.TestMode)
+        {
+            yield return string.Empty;
+            yield return "Invoked on:";
+            yield return $"{indent}{Environment.MachineName} @ {_timestamp.ToLocalTime():H:mmK MMM d yyyy}";
+        }
+
+        yield return string.Empty;
+        yield return "Tool source:";
+        yield return $"{indent}http://aka.ms/Lottie";
     }
 
     // Outputs an error or warning message describing the error with the file path, error code, and description.
