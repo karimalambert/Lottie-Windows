@@ -839,6 +839,12 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie
             }
         }
 
+        static bool IsNullOrZero(float? value) => value is null || value == 0;
+
+        static bool IsNullOrOne(Vector2? value) => value is null || value == Vector2.One;
+
+        static bool IsNullOrZero(Vector2? value) => value is null || value == Vector2.Zero;
+
         Wc.InsetClip GetInsetClip(Wd.InsetClip obj)
         {
             if (GetExisting(obj, out Wc.InsetClip result))
@@ -849,35 +855,35 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie
             result = CacheAndInitializeCompositionObject(obj, _c.CreateInsetClip());
 
             // CompositionClip properties
-            if (obj.CenterPoint.X != 0 || obj.CenterPoint.Y != 0)
+            if (!IsNullOrZero(obj.CenterPoint))
             {
-                result.CenterPoint = obj.CenterPoint;
+                result.CenterPoint = obj.CenterPoint.Value;
             }
 
-            if (obj.Scale.X != 1 || obj.Scale.Y != 1)
+            if (!IsNullOrOne(obj.Scale))
             {
-                result.Scale = obj.Scale;
+                result.Scale = obj.Scale.Value;
             }
 
             // InsetClip properties
-            if (obj.LeftInset != 0)
+            if (!IsNullOrZero(obj.LeftInset))
             {
-                result.LeftInset = obj.LeftInset;
+                result.LeftInset = obj.LeftInset.Value;
             }
 
-            if (obj.RightInset != 0)
+            if (!IsNullOrZero(obj.RightInset))
             {
-                result.RightInset = obj.RightInset;
+                result.RightInset = obj.RightInset.Value;
             }
 
-            if (obj.TopInset != 0)
+            if (!IsNullOrZero(obj.TopInset))
             {
-                result.TopInset = obj.TopInset;
+                result.TopInset = obj.TopInset.Value;
             }
 
-            if (obj.BottomInset != 0)
+            if (!IsNullOrZero(obj.BottomInset))
             {
-                result.BottomInset = obj.BottomInset;
+                result.BottomInset = obj.BottomInset.Value;
             }
 
             StartAnimations(obj, result);

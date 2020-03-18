@@ -164,7 +164,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 }
 
                 // Write the getter.
-                builder.WriteLine($"{TypeName(prop.ExposedType)} {SourceInfo.Namespace}::{SourceClassName}::{prop.Name}::get()");
+                builder.WriteLine($"{TypeName(prop.ExposedType)} {S.Namespace(SourceInfo.Namespace)}::{SourceClassName}::{prop.Name}::get()");
                 builder.OpenScope();
                 if (SourceInfo.GenerateDependencyObject)
                 {
@@ -181,7 +181,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 builder.WriteLine();
 
                 // Write the setter.
-                builder.WriteLine($"void {SourceInfo.Namespace}::{SourceClassName}::{prop.Name}::set({TypeName(prop.ExposedType)} value)");
+                builder.WriteLine($"void {S.Namespace(SourceInfo.Namespace)}::{SourceClassName}::{prop.Name}::set({TypeName(prop.ExposedType)} value)");
                 builder.OpenScope();
                 if (SourceInfo.GenerateDependencyObject)
                 {

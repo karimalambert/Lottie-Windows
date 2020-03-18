@@ -57,7 +57,14 @@ sealed class CommandLineOptions
 
     internal uint? TargetUapVersion { get; private set; }
 
-    internal bool SuppressToolInfo { get; private set; }
+    // TestMode is a hidden switch that causes the output to not contain any
+    // information that would change from run to run given the same inputs.
+    // For example, the output will not contain any tool version number,
+    // any dates, or any path information.
+    //
+    // This mode is designed to allow testing by comparing the output of
+    // a previous version of the tool.
+    internal bool TestMode { get; private set; }
 
     // Returns a command line equivalent to the current set of options, but
     // without the InputFolder, OutputPath or Language options.
@@ -97,7 +104,12 @@ sealed class CommandLineOptions
 
         if (TargetUapVersion.HasValue)
         {
-            sb.Append($" -{nameof(TargetUapVersion)} {TargetUapVersion.Value}");
+            // Only include the target if it is greater than the minimum, because
+            // if it is the same as the minimum it is redundant.
+            if (MinimumUapVersion.HasValue && MinimumUapVersion < TargetUapVersion)
+            {
+                sb.Append($" -{nameof(TargetUapVersion)} {TargetUapVersion.Value}");
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(Interface))
@@ -123,8 +135,8 @@ sealed class CommandLineOptions
         Namespace,
         OutputFolder,
         Strict,
-        SuppressToolInfo,
         TargetUapVersion,
+        TestMode,
     }
 
     // Returns the parsed command line. If ErrorDescription is non-null, then the parse failed.
@@ -185,8 +197,8 @@ sealed class CommandLineOptions
             .AddPrefixedKeyword("namespace", Keyword.Namespace)
             .AddPrefixedKeyword("outputfolder", Keyword.OutputFolder)
             .AddPrefixedKeyword("strict", Keyword.Strict)
-            .AddPrefixedKeyword("suppresstoolinfo", Keyword.SuppressToolInfo)
-            .AddPrefixedKeyword("targetuapversion", Keyword.TargetUapVersion);
+            .AddPrefixedKeyword("targetuapversion", Keyword.TargetUapVersion)
+            .AddPrefixedKeyword("testmode", Keyword.TestMode);
 
         // The last keyword recognized. This defines what the following parameter value is for,
         // or None if not expecting a parameter value.
@@ -217,8 +229,8 @@ sealed class CommandLineOptions
                         case Keyword.Strict:
                             StrictMode = true;
                             break;
-                        case Keyword.SuppressToolInfo:
-                            SuppressToolInfo = true;
+                        case Keyword.TestMode:
+                            TestMode = true;
                             break;
                         case Keyword.DisableCodeGenOptimizer:
                             DisableCodeGenOptimizer = true;

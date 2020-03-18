@@ -357,9 +357,14 @@ sealed class LottieFileProcessor
 
     bool TryGenerateLottieYaml(string outputFilePath)
     {
+        // Remove the path if in TestMode so that the same file
+        // that is referenced via a different path won't produce
+        // a different output.
+        var filename = _options.TestMode ? System.IO.Path.GetFileName(_file) : _file;
+
         var result = TryWriteTextFile(
             outputFilePath,
-            writer => LottieCompositionYamlSerializer.WriteYaml(_lottieComposition, writer, _file));
+            writer => LottieCompositionYamlSerializer.WriteYaml(_lottieComposition, writer, filename));
 
         if (result)
         {
@@ -623,8 +628,8 @@ sealed class LottieFileProcessor
             GenerateDependencyObject = _options.GenerateDependencyObject,
             SourceMetadata = _translationResults[0].SourceMetadata,
             ObjectGraphs = _translationResults.Select(tr => ((CompositionObject)tr.RootVisual, tr.MinimumRequiredUapVersion)).ToArray(),
-            ToolInfo = _options.SuppressToolInfo
-                            ? null
+            ToolInfo = _options.TestMode
+                            ? new[] { $"Command: {syntheticCommandLine}" }
                             : new[] { $"Command: {syntheticCommandLine}", $"Version: {ThisAssembly.AssemblyInformationalVersion}" },
         };
     }

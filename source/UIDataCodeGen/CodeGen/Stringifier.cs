@@ -79,6 +79,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         public virtual string FactoryCall(string value) => value;
 
+        public string Float(double value) => Float((float)value);
+
         public virtual string Float(float value) =>
             (Math.Floor(value) == value
                 ? value.ToString("0", CultureInfo.InvariantCulture)

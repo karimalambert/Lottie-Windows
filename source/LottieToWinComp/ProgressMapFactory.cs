@@ -110,6 +110,12 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                     cur = cur.Next;
                 }
 
+                if (cur.Start == range.Start && cur.End == range.End && cur.Easing == range.Easing)
+                {
+                    // cur is equivalent. No need to add.
+                    return true;
+                }
+
                 if (cur.Next is null)
                 {
                     // Got to the end of the list. Add the range on the end.
@@ -123,13 +129,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                         // The range overlaps the last range. No room to add.
                         return false;
                     }
-                }
-
-                // cur.Start <= range.Start.
-                if (cur.Start == range.Start && cur.End == range.End && cur.Easing == range.Easing)
-                {
-                    // cur is equivalent. No need to add.
-                    return true;
                 }
 
                 var next = cur.Next;
@@ -153,19 +152,20 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
                 return true;
             }
+
+            public override string ToString() => VariableName;
         }
 
-        // Describes a range over which remapping is done, and an easing. If the easing
-        // is null, the range is currently unused.
+        // Describes a range over which remapping is done, and an easing.
         sealed class Range
         {
             internal Range(float start, float end, Easing easing) => (Start, End, Easing) = (start, end, easing);
 
-            internal float Start { get; set; }
+            internal float Start { get; }
 
-            internal float End { get; set; }
+            internal float End { get; }
 
-            internal Easing Easing { get; set; }
+            internal Easing Easing { get; }
 
             internal Range Next { get; set; }
 
@@ -176,6 +176,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
             public override int GetHashCode()
                 => Easing.GetHashCode() ^ Start.GetHashCode() ^ End.GetHashCode();
+
+            public override string ToString() => $"{Start}-{End}";
         }
     }
 }

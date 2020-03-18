@@ -115,6 +115,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 builder.WriteLine("#include \"d2d1.h\"");
                 builder.WriteLine("#include <d2d1_1.h>");
                 builder.WriteLine("#include <d2d1helper.h>");
+                builder.WriteLine("#include <Windows.Graphics.Interop.h>");
 
                 // Interop
                 // BUILD_WINDOWS is defined if the code is being built as part of a Microsoft internal
@@ -132,11 +133,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 builder.WriteLine("namespace ABI");
                 builder.WriteLine("{");
                 builder.WriteLine("#include <Windows.Graphics.Effects.Interop.h>");
-                builder.WriteLine("#include <Windows.Graphics.Interop.h>");
                 builder.WriteLine("}");
                 builder.WriteLine("#else");
                 builder.WriteLine("#include <Windows.Graphics.Effects.Interop.h>");
-                builder.WriteLine("#include <Windows.Graphics.Interop.h>");
                 builder.WriteLine("#endif");
 
                 // ComPtr
@@ -152,14 +151,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             {
                 // The CompsiteEffect class requires std::vector.
                 builder.WriteLine("#include <vector>");
-            }
-
-            if (SourceInfo.UsesCanvasEffects ||
-                SourceInfo.UsesCanvas)
-            {
-                // Interop
-                builder.WriteLine("#include <Windows.Graphics.Interop.h>");
-                builder.WriteLine("#include <Windows.Graphics.Effects.h>");
             }
 
             builder.WriteLine();

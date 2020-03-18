@@ -4,7 +4,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
 using System.Numerics;
 using System.Text;
@@ -368,20 +367,20 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 // Check that the clip and size on the container is the same
                 // as the size on the shape.
                 var clip = (InsetClip)container.Clip;
-                if (clip.TopInset != 0 ||
-                    clip.RightInset != 0 ||
-                    clip.LeftInset != 0 ||
-                    clip.BottomInset != 0)
+                if ((!IsNullOrZero(clip.TopInset)) ||
+                    (!IsNullOrZero(clip.RightInset)) ||
+                    (!IsNullOrZero(clip.LeftInset)) ||
+                    (!IsNullOrZero(clip.BottomInset)))
                 {
                     continue;
                 }
 
-                if (clip.Scale != Vector2.One)
+                if (!IsNullOrOne(clip.Scale))
                 {
                     continue;
                 }
 
-                if (clip.CenterPoint != Vector2.Zero)
+                if (!IsNullOrZero(clip.CenterPoint))
                 {
                     continue;
                 }
@@ -857,10 +856,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                          PropertyId.RotationAngleInDegrees | PropertyId.Scale |
                          PropertyId.TransformMatrix)) == PropertyId.None &&
                     parent.Clip is InsetClip insetClip &&
-                    insetClip.CenterPoint == Vector2.Zero &&
-                    insetClip.Scale == Vector2.One &&
-                    insetClip.LeftInset == 0 && insetClip.RightInset == 0 &&
-                    insetClip.TopInset == 0 && insetClip.BottomInset == 0 &&
+                    IsNullOrZero(insetClip.CenterPoint) &&
+                    IsNullOrOne(insetClip.Scale) &&
+                    IsNullOrZero(insetClip.LeftInset) && IsNullOrZero(insetClip.RightInset) &&
+                    IsNullOrZero(insetClip.TopInset) && IsNullOrZero(insetClip.BottomInset) &&
                     insetClip.Animators.Count == 0 &&
                     parent.Size == shapeVisual.Size &&
                     !IsPropertyAnimated(parent, PropertyId.Size) &&
@@ -872,13 +871,19 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             }
         }
 
+        static bool IsNullOrZero(float? value) => value is null || value == 0;
+
+        static bool IsNullOrOne(Vector2? value) => value is null || value == Vector2.One;
+
+        static bool IsNullOrZero(Vector2? value) => value is null || value == Vector2.Zero;
+
         static bool IsPropertyAnimated(CompositionObject obj, PropertyId property)
         {
             var propertyName = property.ToString();
             return obj.Animators.Any(p => p.AnimatedProperty == propertyName);
         }
 
-        // Finds container shapes that have only Scale properties set for visibility animations
+        // Finds container shapes that a single child and have only Scale properties set for visibility animations
         // and pushes the scale property and animation down.
         static void PushShapeVisbilityDown(
                         ObjectGraph<Node> graph,
