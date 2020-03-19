@@ -68,29 +68,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             internal double DurationInFrames => _metadata.OutPoint - _metadata.InPoint;
 
-            internal IEnumerable<(string name,
-                                   (TimeSpan time, double progress, double frame) start,
-                                   (TimeSpan time, double progress, double frame) end)> Markers
-            {
-                get
-                {
-                    foreach (var m in _metadata.Markers)
-                    {
-                        var startFrame = m.Frame;
-                        var startTime = TimeSpan.FromSeconds(startFrame / FramesPerSecond);
-                        var startProgress = Clamp01(startFrame / DurationInFrames);
-                        var duration = TimeSpan.FromMilliseconds(m.DurationMilliseconds);
-                        var durationInFrames = duration.TotalSeconds * FramesPerSecond;
-                        var endFrame = startFrame + durationInFrames;
-                        var endProgress = Clamp01(endFrame / DurationInFrames);
-                        var endTime = TimeSpan.FromSeconds(endFrame / FramesPerSecond);
-                        yield return (m.Name, (startTime, startProgress, startFrame), (endTime, endProgress, endFrame));
-                    }
-                }
-            }
+            internal IEnumerable<(string name, double frame, TimeSpan duration)> Markers
+                => _metadata.Markers.Select(m => (m.Name, m.Frame, TimeSpan.FromMilliseconds(m.DurationMilliseconds)));
         }
-
-        static double Clamp01(double value)
-             => Math.Min(Math.Max(0, value), 1);
     }
 }

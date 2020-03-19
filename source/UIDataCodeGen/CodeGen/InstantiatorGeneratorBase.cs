@@ -3,11 +3,12 @@
 
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
-using System.Runtime.InteropServices.ComTypes;
 using System.Text;
+using CodeGen;
 using Microsoft.Toolkit.Uwp.UI.Lottie.GenericData;
 using Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData;
@@ -385,27 +386,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 yield return $"Frame rate:  {metadata.FramesPerSecond} fps";
                 yield return $"Frame count: {metadata.DurationInFrames}";
-                if (metadata.Markers.Any())
+                yield return $"Duration:    {metadata.Duration.TotalMilliseconds:0.0} mS";
+
+                foreach (var line in LottieMarkersMonospaceTableFormatter.GetMarkersDescriptionLines(_s, metadata))
                 {
-                    yield return "===========";
-                    yield return "Segments (aka markers):";
-                    foreach (var (name, start, end) in metadata.Markers)
-                    {
-                        if (start.frame > metadata.DurationInFrames)
-                        {
-                            // Ignore markers that refer to frames after the end.
-                            continue;
-                        }
-
-                        var durationMs = (end.time - start.time).TotalMilliseconds;
-                        var duration = durationMs == 0 ? string.Empty : $"{durationMs}mS";
-                        var frames = (end.frame - start.frame) > 0 ? $"{start.frame}..{end.frame}" : start.frame.ToString();
-                        var playCommand = start.time == end.time
-                                ? $"player{Deref}SetProgress({_s.Float(start.progress)})"
-                                : $"player{Deref}PlayAsync({_s.Float(start.progress)}, {_s.Float(end.progress)}, _)";
-
-                        yield return $"{String(name),-15} {frames,8} {duration,6} {playCommand}";
-                    }
+                    yield return line;
                 }
             }
 
@@ -413,21 +398,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             // But only do this if we're NOT generating a DependencyObject because
             // the property bindings available on a DependencyObject are obvious
             // from the code and repeating them here would just be noise.
-            var names = _sourceMetadata.PropertyBindings;
-            if (!_generateDependencyObject && names?.Any() == true)
+            if (!_generateDependencyObject)
             {
-                yield return "===========";
-                yield return "Theme property bindings:";
-                foreach (var entry in names)
+                foreach (var line in ThemePropertiesMonospaceTableFormatter.GetThemePropertyDescriptionLines(_sourceMetadata.PropertyBindings))
                 {
-                    if (entry.ActualType != entry.ExposedType)
-                    {
-                        yield return $"{PropertySetValueTypeName(entry.ExposedType),-8} {String(entry.Name),-15} as {PropertySetValueTypeName(entry.ActualType)}";
-                    }
-                    else
-                    {
-                        yield return $"{PropertySetValueTypeName(entry.ActualType),-8} {String(entry.Name),-15}";
-                    }
+                    yield return line;
                 }
             }
         }

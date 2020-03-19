@@ -677,7 +677,7 @@ sealed class LottieFileProcessor
         }
 
         yield return string.Empty;
-        yield return "Tool source:";
+        yield return $"{ThisAssembly.AssemblyName} source:";
         yield return $"{indent}http://aka.ms/Lottie";
     }
 
