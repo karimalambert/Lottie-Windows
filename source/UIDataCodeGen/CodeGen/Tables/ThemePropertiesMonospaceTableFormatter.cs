@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen;
 
-namespace CodeGen
+namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
 {
     sealed class ThemePropertiesMonospaceTableFormatter : MonospaceTableFormatter
     {
@@ -18,17 +18,17 @@ namespace CodeGen
             }
 
             var header = new[] {
-                ("Theme property", TextAlignment.Center, 1),
-                ("Type", TextAlignment.Center, 1),
-                ("Exposed as", TextAlignment.Center, 1),
+                ColumnData.Create("Theme property"),
+                ColumnData.Create("Type"),
+                ColumnData.Create("Exposed as"),
             };
 
             var records =
                 (from name in names
                  select new[] {
-                     (name.Name, TextAlignment.Left, 1),
-                     (name.ExposedType.ToString(), TextAlignment.Center, 1),
-                     (name.ActualType.ToString(), TextAlignment.Center, 1),
+                     ColumnData.Create(name.Name, TextAlignment.Left, 1),
+                     ColumnData.Create(name.ExposedType.ToString()),
+                     ColumnData.Create(name.ActualType.ToString()),
                  }).ToArray();
 
             return GetTableLines(new[] { header }, records).ToArray();

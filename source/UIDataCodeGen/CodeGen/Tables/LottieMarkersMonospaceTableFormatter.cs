@@ -4,26 +4,26 @@
 using System;
 using System.Linq;
 
-namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
+namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
 {
     sealed class LottieMarkersMonospaceTableFormatter : MonospaceTableFormatter
     {
         internal static string[] GetMarkersDescriptionLines(Stringifier stringifier, SourceMetadata.Lottie metadata)
         {
             var uberHeader = new[] {
-                ("Marker", TextAlignment.Center, 1),
-                ("Start", TextAlignment.Center, 2),
-                (string.Empty, default, 0),
-                ("Duration", TextAlignment.Center, 1),
-                ("Api", TextAlignment.Center, 1),
+                ColumnData.Create("Marker"),
+                ColumnData.Create("Start", TextAlignment.Center, 2),
+                ColumnData.Empty,
+                ColumnData.Create("Duration"),
+                ColumnData.Create("Api"),
             };
 
             var header = new[] {
-                (string.Empty, TextAlignment.Center, 1),
-                ("Frame", TextAlignment.Right, 1),
-                ("mS", TextAlignment.Right, 1),
-                ("mS", TextAlignment.Right, 1),
-                (string.Empty, TextAlignment.Center, 1),
+                ColumnData.Empty,
+                ColumnData.Create("Frame", TextAlignment.Right, 1),
+                ColumnData.Create("mS", TextAlignment.Right, 1),
+                ColumnData.Create("mS", TextAlignment.Right, 1),
+                ColumnData.Empty,
             };
 
             var markers = metadata.Markers;
@@ -45,11 +45,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                          : $"player{stringifier.Deref}PlayAsync({stringifier.Float(progress)}, {stringifier.Float(endProgress)}, _)"
                  select new[]
                  {
-                     (name, TextAlignment.Left, 1),
-                     (start.ToString("0.0"), TextAlignment.Right, 1),
-                     (startMs.ToString("0.0"), TextAlignment.Right, 1),
-                     (duration.TotalMilliseconds.ToString("0.0"), TextAlignment.Right, 1),
-                     (api, TextAlignment.Left, 1),
+                     ColumnData.Create(name, TextAlignment.Left),
+                     ColumnData.Create(start),
+                     ColumnData.Create(startMs),
+                     ColumnData.Create(duration.TotalMilliseconds),
+                     ColumnData.Create(api, TextAlignment.Left),
                  }).ToArray();
 
             return GetTableLines(new[] { uberHeader, header }, records).ToArray();

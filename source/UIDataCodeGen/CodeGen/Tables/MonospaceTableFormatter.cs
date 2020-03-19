@@ -7,7 +7,7 @@ using System.Data;
 using System.Linq;
 using System.Text;
 
-namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
+namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
 {
     // Formats table data for display with a monospaced font.
     // Normal usage is to subclass this formatter to create a formatter
@@ -15,8 +15,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
     abstract class MonospaceTableFormatter
     {
         protected static IEnumerable<string> GetTableLines(
-            (string text, TextAlignment alignment, int colSpan)[][] headers,
-            (string text, TextAlignment alignment, int colSpan)[][] rows)
+            ColumnData[][] headers,
+            ColumnData[][] rows)
         {
             if (rows.Length == 0)
             {
@@ -29,7 +29,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             var columnWidths =
                 (from row in headers.Concat(rows)
                  select (from col in row
-                         let width = col.text.Length + col.colSpan + 1
+                         let width = col.Text.Length + col.Span + 1
                          select width).ToArray()
                  ).Aggregate((w1, w2) => w1.Select((w, i) => Math.Max(w2[i], w)).ToArray()).ToArray();
 
@@ -37,12 +37,12 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             var totalWidth = columnWidths.Sum() + columnWidths.Length - 1;
 
             // Output a line at the top of the table.
-            yield return $"{new string('_', totalWidth + 2)}";
+            yield return new string('_', totalWidth + 2);
 
             // Output the headers.
             foreach (var header in headers)
             {
-                yield return FormatRow(header.Select((x, i) => (x.text, x.alignment, columnWidths[i], x.colSpan)));
+                yield return FormatRow(header.Select((x, i) => (x, columnWidths[i])));
             }
 
             // Output a ruler line between the headers and the rows.
@@ -50,11 +50,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             foreach (var r in rows)
             {
-                yield return FormatRow(r.Select((x, i) => (x.text, x.alignment, columnWidths[i], x.colSpan)));
+                yield return FormatRow(r.Select((x, i) => (x, columnWidths[i])));
             }
 
             // Output a line at the bottom of the table.
-            yield return $" {new string('-', totalWidth + 2)} ";
+            yield return new string('-', totalWidth + 2);
         }
 
         static string Align(string str, int width, TextAlignment alignment)
@@ -93,7 +93,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             }
         }
 
-        static string FormatRow(IEnumerable<(string text, TextAlignment alignment, int width, int span)> rowData)
+        static string FormatRow(IEnumerable<(ColumnData data, int width)> rowData)
         {
             var sb = new StringBuilder();
 
@@ -102,7 +102,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             TextAlignment spanAlignment = default(TextAlignment);
             int spanCountdown = -1;
 
-            foreach (var (text, alignment, width, span) in rowData)
+            foreach (var (column, width) in rowData)
             {
                 if (spanCountdown == 0)
                 {
@@ -119,19 +119,19 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     continue;
                 }
 
-                if (span == 1)
+                if (column.Span == 1)
                 {
                     // Output the column.
                     sb.Append("|");
-                    sb.Append(Align(text, width, alignment));
+                    sb.Append(Align(column.Text, width, column.Alignment));
                 }
                 else
                 {
                     // Span is > 1.
                     // Save the column information until the column has been spanned.
-                    spanCountdown = span - 1;
-                    spanText = text;
-                    spanAlignment = alignment;
+                    spanCountdown = column.Span - 1;
+                    spanText = column.Text;
+                    spanAlignment = column.Alignment;
                     spanWidth = width;
                 }
             }

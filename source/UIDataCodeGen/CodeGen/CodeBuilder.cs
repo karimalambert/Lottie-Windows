@@ -84,9 +84,14 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             {
                 foreach (var line in BreakUpLine(comment))
                 {
-                    WriteLine($"// {line}");
+                    WritePreformattedCommentLine(line);
                 }
             }
+        }
+
+        internal void WritePreformattedCommentLine(string line)
+        {
+            WriteLine($"// {line}");
         }
 
         internal void WriteSummaryComment(string comment)

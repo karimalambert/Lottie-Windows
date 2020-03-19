@@ -115,7 +115,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             // Write a description of the source as comments.
             foreach (var line in GetSourceDescriptionLines())
             {
-                builder.WriteComment(line);
+                builder.WritePreformattedCommentLine(line);
             }
 
             // If the composition has LoadedImageSurface, write a class that implements the IDynamicAnimatedVisualSource interface.

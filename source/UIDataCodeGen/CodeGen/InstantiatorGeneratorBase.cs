@@ -8,8 +8,8 @@ using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
 using System.Text;
-using CodeGen;
 using Microsoft.Toolkit.Uwp.UI.Lottie.GenericData;
+using Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables;
 using Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.MetaData;
@@ -404,6 +404,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 {
                     yield return line;
                 }
+            }
+
+            foreach (var line in GraphStatsMonospaceTableFormatter.GetGraphStatsLines(
+                                    _animatedVisualGenerators.Select(avg => (avg.StatsName, avg.Objects))
+                                    ))
+            {
+                yield return line;
             }
         }
 
@@ -1082,6 +1089,12 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 _nodes = OrderByName(factoryNodes).ToArray();
             }
 
+            internal IEnumerable<object> Objects =>
+                _objectGraph.CompositionObjectNodes.Select(n => n.Object).
+                Cast<object>().
+                Concat(_objectGraph.CanvasGeometryNodes.Select(n => n.Object)).
+                Concat(_objectGraph.CompositionPathNodes.Select(n => n.Object));
+
             // Returns the node for the theme CompositionPropertySet, or null if the
             // IAnimatedVisual does not support theming.
             internal bool IsThemed { get; }
@@ -1480,12 +1493,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 _owner._currentAnimatedVisualGenerator = this;
 
                 // Write the body of the AnimatedVisual class.
-
-                // Start with some information about the class.
-                builder.WriteComment($"Animators:              {_objectGraph.CompositionObjectNodes.Select(pair => pair.Object.Animators.Count).Sum(),6}");
-                builder.WriteComment($"Animated gradient stops:{GetCountOfAnimatedGradientStops(),6}");
-                builder.WriteComment($"Objects:                {_objectGraph.Nodes.Count(),6}");
-
                 _owner.WriteAnimatedVisualStart(builder, this);
 
                 // Write fields for constant values.
@@ -3027,6 +3034,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             }
 
             IAnimatedVisualSourceInfo IAnimatedVisualInfo.AnimatedVisualSourceInfo => _owner;
+
+            // Name used in stats reports to identify the class without using its class name.
+            internal string StatsName => _isPartOfMultiVersionSource ? $"UAP v{_requiredUapVersion}" : null;
 
             string IAnimatedVisualInfo.ClassName => "AnimatedVisual" + (_isPartOfMultiVersionSource ? $"_UAPv{_requiredUapVersion}" : string.Empty);
 
