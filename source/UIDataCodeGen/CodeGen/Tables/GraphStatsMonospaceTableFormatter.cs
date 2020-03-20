@@ -70,6 +70,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
             var records = new[] {
                 GetCompositionObjectCountRecord(compositionObjects, "All CompositionObjects", (o) => true),
                 GetAnimatorCountRecord(compositionObjects),
+                GetCompositionObjectCountRecord(compositionObjects, "ContainerVisuals", (o) => o.Type == CompositionObjectType.ContainerVisual),
+                GetCompositionObjectCountRecord(compositionObjects, "ContainerShapes", (o) => o.Type == CompositionObjectType.CompositionContainerShape),
+                GetCompositionObjectCountRecord(compositionObjects, "ShapeVisuals", (o) => o.Type == CompositionObjectType.ShapeVisual),
                 GetCompositionObjectCountRecord(compositionObjects, "Brushes", (o) => o is CompositionBrush),
                 GetCompositionObjectCountRecord(compositionObjects, "Animated brushes", (o) => o is CompositionBrush b && b.Animators.Count > 0),
                 GetCompositionObjectCountRecord(compositionObjects, "Gradient stops", (o) => o is CompositionColorGradientStop),

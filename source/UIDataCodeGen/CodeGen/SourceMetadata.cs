@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Toolkit.Uwp.UI.Lottie.LottieData;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.MetaData;
 using LCM = Microsoft.Toolkit.Uwp.UI.Lottie.LottieMetadata.LottieCompositionMetadata;
 
@@ -68,8 +69,31 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             internal double DurationInFrames => _metadata.OutPoint - _metadata.InPoint;
 
-            internal IEnumerable<(string name, double frame, TimeSpan duration)> Markers
-                => _metadata.Markers.Select(m => (m.Name, m.Frame, TimeSpan.FromMilliseconds(m.DurationMilliseconds)));
+            internal IEnumerable<(string name, double frame, double durationInFrames)> Markers
+            {
+                get
+                {
+                    var compositionDurationInFrames = DurationInFrames;
+                    foreach (var m in _metadata.Markers)
+                    {
+                        var markerDurationInFrames = m.DurationInFrames;
+                        if (m.Frame > compositionDurationInFrames)
+                        {
+                            // Ignore this marker - it is past the end of the composition.
+                            continue;
+                        }
+
+                        if (m.Frame + m.DurationInFrames > compositionDurationInFrames)
+                        {
+                            // The duration places the end after the end of the composition. Adjust it
+                            // so it is at the end of the composition instead of after it.
+                            markerDurationInFrames = compositionDurationInFrames - m.Frame;
+                        }
+
+                        yield return (m.Name, m.Frame, markerDurationInFrames);
+                    }
+                }
+            }
         }
     }
 }

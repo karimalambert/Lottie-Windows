@@ -44,18 +44,18 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieMetadata
 
         public sealed class Marker
         {
-            internal Marker(string name, double frame, double durationMilliseconds)
+            internal Marker(string name, double frame, double durationInFrames)
             {
                 Name = name;
                 Frame = frame;
-                DurationMilliseconds = durationMilliseconds;
+                DurationInFrames = durationInFrames;
             }
 
             public string Name { get; }
 
             public double Frame { get; }
 
-            public double DurationMilliseconds { get; }
+            public double DurationInFrames { get; }
         }
     }
 }

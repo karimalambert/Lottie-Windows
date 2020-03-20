@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
 using System.Text;
@@ -16,31 +17,34 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
     /// Optimizes a <see cref="Visual"/> tree by combining and removing containers and
     /// removing containers that are empty.
     /// </summary>
-    static class GraphCompactor
+    sealed class GraphCompactor
     {
+        bool _madeProgress;
+
+        GraphCompactor()
+        {
+        }
+
         internal static Visual OptimizeContainers(Visual root)
         {
             // Running the optimization multiple times can improve the results.
-            // Keep iterating as long as the number of nodes is reducing.
-            var graph = ObjectGraph<Node>.FromCompositionObject(root, includeVertices: true);
-            var beforeCount = int.MaxValue;
-            var afterCount = graph.Nodes.Count();
-
-            while (afterCount < beforeCount)
+            // Keep iterating as long as we are making progress.
+            var compactor = new GraphCompactor();
+            do
             {
-                beforeCount = afterCount;
+                compactor._madeProgress = false;
 
-                Optimize(graph);
+                var graph = ObjectGraph<Node>.FromCompositionObject(root, includeVertices: true);
 
-                // Rebuild the graph.
-                graph = ObjectGraph<Node>.FromCompositionObject(root, includeVertices: true);
-                afterCount = graph.Nodes.Count();
-            }
+                compactor.Optimize(graph);
+            } while (compactor._madeProgress);
 
             return root;
         }
 
-        static void Optimize(ObjectGraph<Node> graph)
+        void GraphHasChanged() => _madeProgress = true;
+
+        void Optimize(ObjectGraph<Node> graph)
         {
             // Discover the parents of each container
             foreach (var node in graph.CompositionObjectNodes)
@@ -70,7 +74,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             OptimizeVisuals(graph);
         }
 
-        static void OptimizeVisuals(ObjectGraph<Node> graph)
+        void OptimizeVisuals(ObjectGraph<Node> graph)
         {
             PushPropertiesDownToShapeVisual(graph);
             CoalesceContainerVisuals(graph);
@@ -79,13 +83,14 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             RemoveRedundantInsetClipVisuals(graph);
         }
 
-        static void OptimizeShapes(ObjectGraph<Node> graph)
+        void OptimizeShapes(ObjectGraph<Node> graph)
         {
             ElideTransparentSpriteShapes(graph);
             OptimizeContainerShapes(graph);
+            PushShapeTreeVisibilityIntoVisualTree(graph);
         }
 
-        static void OptimizeContainerShapes(ObjectGraph<Node> graph)
+        void OptimizeContainerShapes(ObjectGraph<Node> graph)
         {
             var containerShapes =
                 (from pair in graph.CompositionObjectNodes
@@ -335,7 +340,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
         // Finds ContainerVisual with a single ShapeVisual child where the ContainerVisual
         // only exists to set an InsetClip. In this case the ContainerVisual can be removed
         // because the ShapeVisual has an implicit InsetClip.
-        static void RemoveRedundantInsetClipVisuals(ObjectGraph<Node> graph)
+        void RemoveRedundantInsetClipVisuals(ObjectGraph<Node> graph)
         {
             var containersClippingShapeVisuals = graph.CompositionObjectNodes.Where(n =>
 
@@ -394,6 +399,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 var parent = node.Parent;
                 if (parent is ContainerVisual parentContainer)
                 {
+                    GraphHasChanged();
+
                     // Replace the container with the ShapeVisual.
                     var indexOfRedundantContainer = parentContainer.Children.IndexOf(container);
 
@@ -411,7 +418,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
         }
 
         // Where possible, replace properties with a TransformMatrix.
-        static void SimplifyProperties(ObjectGraph<Node> graph)
+        void SimplifyProperties(ObjectGraph<Node> graph)
         {
             foreach (var (_, obj) in graph.CompositionObjectNodes)
             {
@@ -431,13 +438,15 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
         // Remove the CenterPoint and RotationAxis properties if they're redundant,
         // and convert properties to TransformMatrix if possible.
-        static void SimplifyProperties(Visual obj)
+        void SimplifyProperties(Visual obj)
         {
             if (obj.CenterPoint.HasValue &&
                 !obj.Scale.HasValue &&
                 !obj.RotationAngleInDegrees.HasValue &&
                 !obj.Animators.Where(a => a.AnimatedProperty == nameof(obj.Scale) || a.AnimatedProperty == nameof(obj.RotationAngleInDegrees)).Any())
             {
+                GraphHasChanged();
+
                 // Centerpoint and RotationAxis is not needed if Scale or Rotation are not used.
                 obj.CenterPoint = null;
                 obj.RotationAxis = null;
@@ -476,8 +485,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     transform;
 
                 // If the matrix actually does something, set it.
-                if (!combinedMatrix.IsIdentity)
+                if (!combinedMatrix.IsIdentity && combinedMatrix != transform)
                 {
+                    GraphHasChanged();
                     var transformDescription = DescribeTransform(scale, rotation, offset);
                     AppendShortDescription(obj, transformDescription);
                     AppendLongDescription(obj, transformDescription);
@@ -487,7 +497,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
         }
 
         // Remove the centerpoint property if it's redundant, and convert properties to TransformMatrix if possible.
-        static void SimplifyProperties(CompositionShape obj)
+        void SimplifyProperties(CompositionShape obj)
         {
             // Remove the centerpoint if it's not used by Scale or Rotation.
             if (obj.CenterPoint.HasValue &&
@@ -495,6 +505,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 !obj.RotationAngleInDegrees.HasValue &&
                 !obj.Animators.Where(a => a.AnimatedProperty == nameof(obj.Scale) || a.AnimatedProperty == nameof(obj.RotationAngleInDegrees)).Any())
             {
+                GraphHasChanged();
+
                 // Centerpoint is not needed if Scale or Rotation are not used.
                 obj.CenterPoint = null;
             }
@@ -526,8 +538,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     transform;
 
                 // If the matrix actually does something, set it.
-                if (!combinedMatrix.IsIdentity)
+                if (!combinedMatrix.IsIdentity && combinedMatrix != transform)
                 {
+                    GraphHasChanged();
+
                     var transformDescription = DescribeTransform(scale, rotation, offset);
                     AppendShortDescription(obj, transformDescription);
                     AppendLongDescription(obj, transformDescription);
@@ -543,7 +557,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             return brush == null || (!brush.Animators.Any() && (brush as CompositionColorBrush)?.Color?.A == 0);
         }
 
-        static void ElideTransparentSpriteShapes(ObjectGraph<Node> graph)
+        void ElideTransparentSpriteShapes(ObjectGraph<Node> graph)
         {
             var transparentShapes =
                 (from pair in graph.CompositionObjectNodes
@@ -554,12 +568,14 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
             foreach (var pair in transparentShapes)
             {
+                GraphHasChanged();
+
                 pair.Parent.Shapes.Remove(pair.Shape);
             }
         }
 
         // Removes any CompositionContainerShapes that have no children.
-        static void ElideEmptyContainerShapes(
+        void ElideEmptyContainerShapes(
             ObjectGraph<Node> graph,
             (Node node, CompositionContainerShape container, IContainShapes parent)[] containerShapes)
         {
@@ -574,6 +590,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 {
                     if (!removed.Contains(container) && container.Shapes.Count == 0)
                     {
+                        GraphHasChanged();
+
                         // Indicate that we successfully removed a container.
                         madeProgress = true;
 
@@ -587,7 +605,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             }
         }
 
-        static void PushContainerShapeTransformsDown(
+        void PushContainerShapeTransformsDown(
             ObjectGraph<Node> graph,
             (Node node, CompositionContainerShape container, IContainShapes parent)[] containerShapes)
         {
@@ -644,7 +662,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             }
         }
 
-        static void ElideStructuralContainerShapes(
+        void ElideStructuralContainerShapes(
             ObjectGraph<Node> graph,
             (Node node, CompositionContainerShape container, IContainShapes parent)[] containerShapes)
         {
@@ -671,7 +689,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
         // Removes a container shape, copying its shapes into its parent.
         // Does nothing if the container has no parent.
-        static void ElideContainerShape(ObjectGraph<Node> graph, CompositionContainerShape container)
+        void ElideContainerShape(ObjectGraph<Node> graph, CompositionContainerShape container)
         {
             // Insert the children into the parent.
             var parent = (IContainShapes)graph[container].Parent;
@@ -702,6 +720,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 return;
             }
 
+            GraphHasChanged();
+
             // Insert the first child where the container was.
             var child0 = children[0];
 
@@ -731,7 +751,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
         // Removes a container visual, copying its children into its parent.
         // Does nothing if the container has no parent.
-        static bool TryElideContainerVisual(ObjectGraph<Node> graph, ContainerVisual container)
+        bool TryElideContainerVisual(ObjectGraph<Node> graph, ContainerVisual container)
         {
             // Insert the children into the parent.
             var parent = (ContainerVisual)graph[container].Parent;
@@ -755,6 +775,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 // the container is for a layer type that we don't support.
                 return true;
             }
+
+            GraphHasChanged();
 
             // Insert the first child where the container was.
             var child0 = children[0];
@@ -788,7 +810,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
         // Finds ContainerShapes that only has it's Transform set, with a single child that
         // does not have its Transform set and pulls the child into the parent. This is OK to do
         // because the Transform will still be evaluated as if it is higher in the tree.
-        static void CoalesceContainerShapes2(
+        void CoalesceContainerShapes2(
             ObjectGraph<Node> graph,
             (Node node, CompositionContainerShape container, IContainShapes parent)[] containerShapes)
         {
@@ -883,9 +905,153 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             return obj.Animators.Any(p => p.AnimatedProperty == propertyName);
         }
 
-        // Finds container shapes that a single child and have only Scale properties set for visibility animations
+        // Finds ShapeVisuals with a single shape that has a visibility animation and
+        // move the animation into the ShapeVisual.
+        static void PushShapeTreeVisibilityIntoVisualTree(ObjectGraph<Node> graph)
+        {
+            var candidate =
+                (from n in graph.CompositionObjectNodes
+                 let sv = n.Object as ShapeVisual
+                 where sv != null && sv.Shapes.Count == 1
+                 let shape = sv.Shapes[0]
+                 where IsScaleUsedForVisibility(shape)
+                 select sv).ToArray();
+
+            foreach (var visual in candidate)
+            {
+                // TODO
+                // Get the visbility animation as a sequence of (bool,progress).
+                // Remove the visibility animation from the shape.
+                // Get the visibility animation from the shape visual as a sequence
+                // Convert to a new visibility animation. Apply it to the shape visual
+                var shape = visual.Shapes[0];
+                var visualVisibility = GetVisiblityAnimationDescription(visual).ToArray();
+                var shapeVisibility = GetVisiblityAnimationDescription(shape).ToArray();
+
+                Debug.Assert(shapeVisibility.Length > 0, "Checked above");
+
+                if (visualVisibility.Length == 0)
+                {
+                    // Easy case - the visual isn't being used for visibility.
+                    var c = new Compositor();
+                    var animation = c.CreateBooleanKeyFrameAnimation();
+                    if (shapeVisibility[0].progress == 0)
+                    {
+                        // Set the initial visiblity.
+                        visual.IsVisible = shapeVisibility[0].isVisible;
+                    }
+
+                    foreach (var visibility in shapeVisibility)
+                    {
+                        if (visibility.progress == 0)
+                        {
+                            // The 0 progress value is already handled.
+                            continue;
+                        }
+                        else
+                        {
+                            animation.InsertKeyFrame(visibility.progress, visibility.isVisible);
+                        }
+                    }
+
+                    visual.StartAnimation("IsVisible", animation);
+
+                    var progressAnimation = shape.TryGetAnimationController("Scale").Animators.Where(anim => anim.AnimatedProperty == "Progress").First().Animation;
+                    var controller = visual.TryGetAnimationController("IsVisible");
+                    controller.Pause();
+                    controller.StartAnimation("Progress", progressAnimation);
+
+                    // Clear out the Scale properties and animations from the shape.
+                    shape.Scale = null;
+                    shape.UnbindAnimation("Scale");
+                }
+            }
+        }
+
+        static IEnumerable<(bool isVisible, float progress)> GetVisiblityAnimationDescription(Visual visual)
+        {
+            // Get the visibility animation.
+            // TODO - this needs to take the controller's Progress expression into account.
+            var visiblityAnimator =
+                (from animator in visual.Animators
+                 where animator.AnimatedProperty == "IsVisible"
+                 let animation = animator.Animation as BooleanKeyFrameAnimation
+                 where animation != null
+                 select animation).FirstOrDefault();
+
+            if (visiblityAnimator is null)
+            {
+                // Not animated, or it uses an expression so we can't deal with it.
+                yield break;
+            }
+
+            var firstSeen = false;
+
+            foreach (KeyFrameAnimation<bool, Expr.Boolean>.ValueKeyFrame kf in visiblityAnimator.KeyFrames)
+            {
+                if (!firstSeen)
+                {
+                    firstSeen = true;
+                    if (kf.Progress != 0 && visual.IsVisible.HasValue && !visual.IsVisible.Value)
+                    {
+                        yield return (false, 0);
+                    }
+
+                    yield return (kf.Value, kf.Progress);
+                }
+            }
+        }
+
+        static IEnumerable<(bool isVisible, float progress)> GetVisiblityAnimationDescription(CompositionShape shape)
+        {
+            var scaleValue = shape.Scale;
+
+            if (scaleValue.HasValue && scaleValue.Value != Vector2.One && scaleValue.Value != Vector2.Zero)
+            {
+                // The animation is not used for visibility. Precondition.
+                throw new InvalidOperationException();
+            }
+
+            var scaleAnimator = shape.Animators.Where(anim => anim.AnimatedProperty == "Scale").FirstOrDefault();
+
+            if (scaleAnimator is null)
+            {
+                // The animation is not used for visibility. Precondition.
+                throw new InvalidOperationException();
+            }
+
+            var firstSeen = false;
+            var scaleAnimation = (Vector2KeyFrameAnimation)scaleAnimator.Animation;
+            foreach (KeyFrameAnimation<Vector2, Expr.Vector2>.ValueKeyFrame kf in scaleAnimation.KeyFrames)
+            {
+                if (kf.Easing.Type != CompositionObjectType.StepEasingFunction)
+                {
+                    // The animation is not used for visibility. Precondition.
+                    throw new InvalidOperationException();
+                }
+
+                if (kf.Value != Vector2.One && kf.Value != Vector2.Zero)
+                {
+                    // The animation is not used for visibility. Precondition.
+                    throw new InvalidOperationException();
+                }
+
+                if (!firstSeen)
+                {
+                    firstSeen = true;
+                    if (kf.Progress != 0 && shape.Scale.HasValue && shape.Scale.Value != Vector2.One)
+                    {
+                        yield return (false, 0);
+                    }
+
+                    yield return (kf.Value == Vector2.One, kf.Progress);
+                }
+            }
+        }
+
+        // Finds container shapes with a single child and have only Scale properties set for visibility animations
         // and pushes the scale property and animation down.
-        static void PushShapeVisbilityDown(
+        void PushShapeVisbilityDown(
                         ObjectGraph<Node> graph,
                         (Node node, CompositionContainerShape container, IContainShapes parent)[] containerShapes)
         {
@@ -923,7 +1089,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
         // Find ContainerShapes that have a single SpriteShape with orthongonal properties
         // and remove the ContainerShape.
-        static void PushPropertiesDownToSpriteShape(
+        void PushPropertiesDownToSpriteShape(
             ObjectGraph<Node> graph,
             (Node node, CompositionContainerShape container, IContainShapes parent)[] containerShapes)
         {
@@ -1004,7 +1170,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             return true;
         }
 
-        static void CoalesceContainerVisuals(ObjectGraph<Node> graph)
+        void CoalesceContainerVisuals(ObjectGraph<Node> graph)
         {
             // If a container is not animated and has no properties set, its children can be inserted into its parent.
             var containersWithNoPropertiesSet = graph.CompositionObjectNodes.Where(n =>
@@ -1017,6 +1183,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             // Pull the children of the container into the parent of the container. Remove the unnecessary containers.
             foreach (var (node, obj) in containersWithNoPropertiesSet)
             {
+                GraphHasChanged();
+
                 var container = (ContainerVisual)obj;
 
                 // Insert the children into the parent.
@@ -1189,7 +1357,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
         // If a ContainerVisual has exactly one child that is a ContainerVisual, and each
         // affects different sets of properties then they can be combined into one.
-        static void CoalesceOrthogonalContainerVisuals(ObjectGraph<Node> graph)
+        void CoalesceOrthogonalContainerVisuals(ObjectGraph<Node> graph)
         {
             // If a container is not animated and has no properties set, its children can be inserted into its parent.
             var containersWithASingleContainer = graph.CompositionObjectNodes.Where(n =>
@@ -1290,7 +1458,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
         // If a ContainerVisual has exactly one child that is a SpriteVisual or ShapeVisual, and each
         // affects different sets of properties then properties from the container can be
         // copied into the SpriteVisual and the container can be removed.
-        static void CoalesceOrthogonalVisuals(ObjectGraph<Node> graph)
+        void CoalesceOrthogonalVisuals(ObjectGraph<Node> graph)
         {
             // If a container is not animated and has no properties set, its children can be inserted into its parent.
             var containersWithASingleSprite = graph.CompositionObjectNodes.Where(n =>
@@ -1518,8 +1686,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 _ => PropertyId.Unknown,
             };
 
-        static void CopyDescriptions(IDescribable from, IDescribable to)
+        void CopyDescriptions(IDescribable from, IDescribable to)
         {
+            GraphHasChanged();
+
             // Copy the short description. This may lose some information
             // in the "to" but generally that same information is in the
             // "from" description anyway.

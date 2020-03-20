@@ -192,7 +192,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                 lottieComposition.FramesPerSecond,
                 lottieComposition.InPoint,
                 lottieComposition.OutPoint,
-                lottieComposition.Markers.Select(m => (m.Name, m.Frame, m.DurationMilliseconds)));
+                lottieComposition.Markers.Select(m => (m.Name, m.Frame, m.DurationInFrames)));
 
         void Translate()
         {

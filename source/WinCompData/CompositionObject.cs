@@ -133,6 +133,24 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData
         }
 
         /// <summary>
+        /// Unbinds an animation from a property.
+        /// </summary>
+        /// <param name="target">The name of the property.</param>
+        /// <remarks>This is helper for manipulating obje graphs, and
+        /// is not part of the Windows.UI.Composition API.</remarks>
+        public void UnbindAnimation(string target)
+        {
+            for (var i = 0; i < _animators.Count; i++)
+            {
+                if (_animators[i].AnimatedProperty == target)
+                {
+                    _animators.RemoveAt(i);
+                    return;
+                }
+            }
+        }
+
+        /// <summary>
         /// Gets the animators that are bound to this object.
         /// </summary>
         public IReadOnlyList<Animator> Animators => _animators;

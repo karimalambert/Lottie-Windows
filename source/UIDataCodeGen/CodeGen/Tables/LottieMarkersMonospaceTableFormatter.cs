@@ -3,6 +3,7 @@
 
 using System;
 using System.Linq;
+using System.Net;
 
 namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
 {
@@ -31,24 +32,28 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
             var records =
                 (from marker in markers
                  let name = marker.name
-                 let start = marker.frame
-                 let duration = marker.duration
+                 let startFrame = marker.frame
+                 let durationInFrames = marker.durationInFrames
 
                  // Ignore markers that refer to frames after the end.
-                 where start <= metadata.DurationInFrames
+                 where startFrame <= metadata.DurationInFrames
 
-                 let progress = start / metadata.DurationInFrames
-                 let startMs = progress * metadata.Duration.TotalMilliseconds
-                 let endProgress = progress + (duration / metadata.Duration)
-                 let api = duration <= TimeSpan.Zero
-                         ? $"player{stringifier.Deref}SetProgress({stringifier.Float(progress)})"
-                         : $"player{stringifier.Deref}PlayAsync({stringifier.Float(progress)}, {stringifier.Float(endProgress)}, _)"
+                 let startProgress = startFrame / metadata.DurationInFrames
+                 let startMs = startProgress * metadata.Duration.TotalMilliseconds
+
+                 let endFrame = startFrame + durationInFrames
+                 let endProgress = endFrame / metadata.DurationInFrames
+                 let durationMs = (endProgress - startProgress) * metadata.Duration.TotalMilliseconds
+
+                 let api = durationInFrames <= 0
+                         ? $"player{stringifier.Deref}SetProgress({stringifier.Float(startProgress)})"
+                         : $"player{stringifier.Deref}PlayAsync({stringifier.Float(startProgress)}, {stringifier.Float(endProgress)}, _)"
                  select new[]
                  {
                      ColumnData.Create(name, TextAlignment.Left),
-                     ColumnData.Create(start),
+                     ColumnData.Create(startFrame),
                      ColumnData.Create(startMs),
-                     ColumnData.Create(duration.TotalMilliseconds),
+                     ColumnData.Create(durationMs),
                      ColumnData.Create(api, TextAlignment.Left),
                  }).ToArray();
 
