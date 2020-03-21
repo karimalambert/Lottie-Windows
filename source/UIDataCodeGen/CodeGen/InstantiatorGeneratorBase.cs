@@ -699,7 +699,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         bool IAnimatedVisualSourceInfo.UsesCompositeEffect => _animatedVisualGenerators.Any(f => f.UsesCompositeEffect);
 
-        IReadOnlyList<(string name, float value)> IAnimatedVisualSourceInfo.PublicConstants => _publicConstants;
+        IReadOnlyList<(string name, float value)> IAnimatedVisualSourceInfo.InternalConstants => _publicConstants;
 
         IReadOnlyList<LoadedImageSurfaceInfo> IAnimatedVisualSourceInfo.LoadedImageSurfaces => _loadedImageSurfaceInfos;
 

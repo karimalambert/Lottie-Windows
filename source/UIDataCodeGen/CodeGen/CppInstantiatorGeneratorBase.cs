@@ -885,11 +885,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.Indent();
 
             // Add any public constants.
-            if (SourceInfo.PublicConstants.Count > 0)
+            if (SourceInfo.InternalConstants.Count > 0)
             {
                 builder.WriteComment("Constants.");
 
-                foreach (var c in SourceInfo.PublicConstants)
+                foreach (var c in SourceInfo.InternalConstants)
                 {
                     builder.WriteLine($"static constexpr float {c.name}{{ {S.Float(c.value)} }};");
                     builder.WriteLine();

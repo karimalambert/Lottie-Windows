@@ -105,7 +105,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         /// <summary>
         /// Public constants.
         /// </summary>
-        IReadOnlyList<(string name, float value)> PublicConstants { get; }
+        IReadOnlyList<(string name, float value)> InternalConstants { get; }
 
         /// <summary>
         /// Accesses metadata associated with the source of the composition. This may contain

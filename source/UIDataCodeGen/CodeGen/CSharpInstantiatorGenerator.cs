@@ -234,13 +234,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             builder.OpenScope();
 
-            // Add any public constants.
-            if (info.PublicConstants.Count > 0)
+            // Add any internal constants.
+            if (info.InternalConstants.Count > 0)
             {
                 builder.WriteComment("Constants.");
-                foreach (var c in info.PublicConstants)
+                foreach (var c in info.InternalConstants)
                 {
-                    builder.WriteLine($"public const float {c.name} = {_s.Float(c.value)};");
+                    builder.WriteLine($"internal const float {c.name} = {_s.Float(c.value)};");
                     builder.WriteLine();
                 }
             }
