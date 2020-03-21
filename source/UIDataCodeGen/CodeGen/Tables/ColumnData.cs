@@ -11,6 +11,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
         internal static ColumnData Create(string text, TextAlignment alignment, int span)
             => new ColumnData(text, alignment, span);
 
+        internal static ColumnData Create(string text, int span)
+            => new ColumnData(text, TextAlignment.Center, span);
+
         internal static ColumnData Create(string text, TextAlignment alignment)
              => new ColumnData(text, alignment, 1);
 

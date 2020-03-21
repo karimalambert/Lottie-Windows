@@ -883,14 +883,25 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.UnIndent();
             builder.WriteLine("public:");
             builder.Indent();
+
+            // Add any public constants.
+            if (SourceInfo.PublicConstants.Count > 0)
+            {
+                builder.WriteComment("Constants.");
+                WritePublicConstants(builder);
+            }
+
             if (SourceInfo.IsThemed)
             {
                 // Write properties declarations for each themed property.
+                builder.WriteComment("Theme properties.");
                 WritePublicThemeHeader(builder);
             }
         }
 
         protected abstract void WritePrivateThemeHeader(CodeBuilder builder);
+
+        protected abstract void WritePublicConstants(CodeBuilder builder);
 
         protected abstract void WritePublicThemeHeader(CodeBuilder builder);
 

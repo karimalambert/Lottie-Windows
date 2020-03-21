@@ -144,17 +144,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 _ => throw new InvalidOperationException(),
             };
 
-        static string ActualType(PropertyBinding binding)
-            => binding.ExposedType switch
-            {
-                PropertySetValueType.Color => "Vector4",
-                PropertySetValueType.Scalar => "float",
-                PropertySetValueType.Vector2 => "Vector2",
-                PropertySetValueType.Vector3 => "Vector3",
-                PropertySetValueType.Vector4 => "Vector4",
-                _ => throw new InvalidOperationException(),
-            };
-
         void WriteThemeProperties(
             CodeBuilder builder,
             IAnimatedVisualSourceInfo info)
@@ -245,6 +234,17 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             builder.OpenScope();
 
+            // Add any public constants.
+            if (info.PublicConstants.Count > 0)
+            {
+                builder.WriteComment("Constants.");
+                foreach (var c in info.PublicConstants)
+                {
+                    builder.WriteLine($"public const float {c.name} = {_s.Float(c.value)};");
+                    builder.WriteLine();
+                }
+            }
+
             // Add the methods and fields needed for theming.
             WriteThemeMethodsAndFields(builder, info);
 
@@ -298,7 +298,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 WriteDependencyPropertyFields(builder, info);
 
                 // Add properties for each of the theme properties.
-                WriteThemeProperties(builder, info);
+                if (info.IsThemed)
+                {
+                    builder.WriteComment("Theme properties.");
+                    WriteThemeProperties(builder, info);
+                }
 
                 builder.WriteLine("public CompositionPropertySet GetThemeProperties(Compositor compositor)");
                 builder.OpenScope();

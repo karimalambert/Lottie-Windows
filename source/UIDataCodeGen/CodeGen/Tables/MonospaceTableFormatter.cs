@@ -28,6 +28,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
             // be taken up by each column separator.
             var columnWidths =
                 (from row in headers.Concat(rows)
+                 where row != null
                  select (from col in row
                          let width = col.Text.Length + col.Span + 1
                          select width).ToArray()
@@ -50,7 +51,15 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
 
             foreach (var r in rows)
             {
-                yield return FormatRow(r.Select((x, i) => (x, columnWidths[i])));
+                if (r is null)
+                {
+                    // A null is a request to insert a row separator.
+                    yield return $"|{string.Join('+', columnWidths.Select(w => new string('-', w)))}|";
+                }
+                else
+                {
+                    yield return FormatRow(r.Select((x, i) => (x, columnWidths[i])));
+                }
             }
 
             // Output a line at the bottom of the table.

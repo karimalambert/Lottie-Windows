@@ -85,6 +85,15 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.WriteLine();
         }
 
+        protected override void WritePublicConstants(CodeBuilder builder)
+        {
+            foreach (var c in SourceInfo.PublicConstants)
+            {
+                builder.WriteLine($"static const float {c.name}{{{S.Float(c.value)}}};");
+                builder.WriteLine();
+            }
+        }
+
         protected override void WritePublicThemeHeader(CodeBuilder builder)
         {
             // Write properties declarations for each themed property.

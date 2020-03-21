@@ -9,6 +9,7 @@ using System.Linq;
 using System.Numerics;
 using System.Text;
 using Microsoft.Toolkit.Uwp.UI.Lottie.GenericData;
+using Microsoft.Toolkit.Uwp.UI.Lottie.LottieMetadata;
 using Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables;
 using Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData;
@@ -53,6 +54,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         readonly bool _isThemed;
         readonly IReadOnlyList<string> _toolInfo;
         readonly string _interfaceType;
+        readonly IReadOnlyList<(Marker marker, string startConstant, string endConstant)> _lottieMarkers;
+        readonly IReadOnlyList<(string name, float value)> _publicConstants;
 
         AnimatedVisualGenerator _currentAnimatedVisualGenerator;
 
@@ -72,6 +75,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             _s = stringifier;
             _toolInfo = configuration.ToolInfo;
             _interfaceType = configuration.InterfaceType;
+            _lottieMarkers = GetMarkers(_sourceMetadata.LottieMetadata).ToArray();
+            _publicConstants = GetPublicConstants().ToArray();
+
             var graphs = configuration.ObjectGraphs;
 
             _animatedVisualGenerators = graphs.Select(g => new AnimatedVisualGenerator(this, g.graphRoot, g.requiredUapVersion, graphs.Count > 1)).ToArray();
@@ -369,6 +375,43 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             }
         }
 
+        static IEnumerable<(Marker marker, string startConstant, string endConstant)> GetMarkers(LottieCompositionMetadata metadata)
+        {
+            return
+                from m in metadata.FilteredMarkers
+                let constantBaseName = ConstantName(m.Name)
+                let isZeroDuration = m.Duration.Frames <= 0
+                let baseName = $"M_{constantBaseName}"
+                let startConstant = isZeroDuration ? baseName : $"{baseName}_start"
+                let endConstant = isZeroDuration ? null : $"{baseName}_end"
+                select (m, startConstant, endConstant);
+        }
+
+        IEnumerable<(string name, float value)> GetPublicConstants()
+        {
+            foreach (var (marker, startConstant, endConstant) in _lottieMarkers)
+            {
+                yield return (startConstant, (float)marker.Frame.Progress);
+                if (marker.Duration.Frames > 0)
+                {
+                    yield return (endConstant, (float)(marker.Frame + marker.Duration).Progress);
+                }
+            }
+        }
+
+        // Returns a name that can be used as the name of a class constant.
+        // The returned name is expected to be prefixed with string.
+        static string ConstantName(string baseName)
+        {
+            // Replace any disallowed character with underscores.
+            var constantName =
+                new string((from ch in baseName
+                            select char.IsLetterOrDigit(ch) ? ch : '_').ToArray());
+
+            // Remove any duplicated underscores.
+            return constantName.Replace("__", "_");
+        }
+
         /// <summary>
         /// Returns text that describes the contents of the source metadata.
         /// </summary>
@@ -384,11 +427,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     yield return $"Name:        {metadata.CompositionName}";
                 }
 
-                yield return $"Frame rate:  {metadata.FramesPerSecond} fps";
-                yield return $"Frame count: {metadata.DurationInFrames}";
-                yield return $"Duration:    {metadata.Duration.TotalMilliseconds:0.0} mS";
+                yield return $"Frame rate:  {metadata.Duration.FPS} fps";
+                yield return $"Frame count: {metadata.Duration.Frames}";
+                yield return $"Duration:    {metadata.Duration.Time.TotalMilliseconds:0.0} mS";
 
-                foreach (var line in LottieMarkersMonospaceTableFormatter.GetMarkersDescriptionLines(_s, metadata))
+                foreach (var line in LottieMarkersMonospaceTableFormatter.GetMarkersDescriptionLines(_s, _lottieMarkers))
                 {
                     yield return line;
                 }
@@ -655,6 +698,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         IReadOnlyList<IAnimatedVisualInfo> IAnimatedVisualSourceInfo.AnimatedVisualInfos => _animatedVisualGenerators;
 
         bool IAnimatedVisualSourceInfo.UsesCompositeEffect => _animatedVisualGenerators.Any(f => f.UsesCompositeEffect);
+
+        IReadOnlyList<(string name, float value)> IAnimatedVisualSourceInfo.PublicConstants => _publicConstants;
 
         IReadOnlyList<LoadedImageSurfaceInfo> IAnimatedVisualSourceInfo.LoadedImageSurfaces => _loadedImageSurfaceInfos;
 
@@ -2373,6 +2418,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             void WriteCreateAndAssignKeyFrameAnimation(CodeBuilder builder, KeyFrameAnimation_ animation, ObjectData node)
             {
                 WriteCreateAssignment(builder, node, $"_c{Deref}Create{animation.Type}()");
+
+                Debug.Assert(animation.Duration.Ticks > 0, "Invariant");
                 WritePropertySetStatement(builder, "Duration", TimeSpan(animation.Duration));
 
                 InitializeCompositionAnimation(builder, animation, node);

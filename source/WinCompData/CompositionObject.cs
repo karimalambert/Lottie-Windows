@@ -133,12 +133,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData
         }
 
         /// <summary>
-        /// Unbinds an animation from a property.
+        /// Stops an animation that was previously started.
         /// </summary>
         /// <param name="target">The name of the property.</param>
-        /// <remarks>This is helper for manipulating obje graphs, and
-        /// is not part of the Windows.UI.Composition API.</remarks>
-        public void UnbindAnimation(string target)
+        public void StopAnimation(string target)
         {
             for (var i = 0; i < _animators.Count; i++)
             {

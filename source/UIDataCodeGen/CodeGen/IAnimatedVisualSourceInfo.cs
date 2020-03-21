@@ -103,6 +103,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         IReadOnlyList<LoadedImageSurfaceInfo> LoadedImageSurfaces { get; }
 
         /// <summary>
+        /// Public constants.
+        /// </summary>
+        IReadOnlyList<(string name, float value)> PublicConstants { get; }
+
+        /// <summary>
         /// Accesses metadata associated with the source of the composition. This may contain
         /// information such as the frame rate and markers from the source. The contents of
         /// this data is source specific.

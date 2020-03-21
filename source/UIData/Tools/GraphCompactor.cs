@@ -440,10 +440,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
         // and convert properties to TransformMatrix if possible.
         void SimplifyProperties(Visual obj)
         {
+            var nonDefaultProperties = GetNonDefaultProperties(obj);
             if (obj.CenterPoint.HasValue &&
-                !obj.Scale.HasValue &&
-                !obj.RotationAngleInDegrees.HasValue &&
-                !obj.Animators.Where(a => a.AnimatedProperty == nameof(obj.Scale) || a.AnimatedProperty == nameof(obj.RotationAngleInDegrees)).Any())
+                ((nonDefaultProperties & (PropertyId.RotationAngleInDegrees | PropertyId.Scale)) == PropertyId.None))
             {
                 GraphHasChanged();
 
@@ -500,10 +499,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
         void SimplifyProperties(CompositionShape obj)
         {
             // Remove the centerpoint if it's not used by Scale or Rotation.
+            var nonDefaultProperties = GetNonDefaultProperties(obj);
             if (obj.CenterPoint.HasValue &&
-                !obj.Scale.HasValue &&
-                !obj.RotationAngleInDegrees.HasValue &&
-                !obj.Animators.Where(a => a.AnimatedProperty == nameof(obj.Scale) || a.AnimatedProperty == nameof(obj.RotationAngleInDegrees)).Any())
+                ((nonDefaultProperties & (PropertyId.RotationAngleInDegrees | PropertyId.Scale)) == PropertyId.None))
             {
                 GraphHasChanged();
 
@@ -511,6 +509,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 obj.CenterPoint = null;
             }
 
+            /*
             // Convert the properties to a transform matrix. This can reduce the
             // number of calls needed to initialize the object, and makes finding
             // and removing redundant containers easier.
@@ -548,6 +547,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     obj.TransformMatrix = combinedMatrix;
                 }
             }
+            */
         }
 
         static float DegreesToRadians(float angle) => (float)(Math.PI * angle / 180.0);
@@ -925,23 +925,24 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 // Get the visibility animation from the shape visual as a sequence
                 // Convert to a new visibility animation. Apply it to the shape visual
                 var shape = visual.Shapes[0];
-                var visualVisibility = GetVisiblityAnimationDescription(visual).ToArray();
-                var shapeVisibility = GetVisiblityAnimationDescription(shape).ToArray();
+                var visualVisibility = GetVisiblityAnimationDescription(visual);
+                var shapeVisibility = GetVisiblityAnimationDescription(shape);
 
-                Debug.Assert(shapeVisibility.Length > 0, "Checked above");
+                Debug.Assert(shapeVisibility.sequence.Length > 0, "Checked above");
 
-                if (visualVisibility.Length == 0)
+                if (visualVisibility.sequence.Length == 0)
                 {
                     // Easy case - the visual isn't being used for visibility.
                     var c = new Compositor();
                     var animation = c.CreateBooleanKeyFrameAnimation();
-                    if (shapeVisibility[0].progress == 0)
+                    animation.Duration = shapeVisibility.duration;
+                    if (shapeVisibility.sequence[0].progress == 0)
                     {
                         // Set the initial visiblity.
-                        visual.IsVisible = shapeVisibility[0].isVisible;
+                        visual.IsVisible = shapeVisibility.sequence[0].isVisible;
                     }
 
-                    foreach (var visibility in shapeVisibility)
+                    foreach (var visibility in shapeVisibility.sequence)
                     {
                         if (visibility.progress == 0)
                         {
@@ -963,46 +964,53 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
                     // Clear out the Scale properties and animations from the shape.
                     shape.Scale = null;
-                    shape.UnbindAnimation("Scale");
+                    shape.StopAnimation("Scale");
                 }
             }
         }
 
-        static IEnumerable<(bool isVisible, float progress)> GetVisiblityAnimationDescription(Visual visual)
+        static (TimeSpan duration, (bool isVisible, float progress)[] sequence) GetVisiblityAnimationDescription(Visual visual)
         {
             // Get the visibility animation.
             // TODO - this needs to take the controller's Progress expression into account.
-            var visiblityAnimator =
-                (from animator in visual.Animators
-                 where animator.AnimatedProperty == "IsVisible"
-                 let animation = animator.Animation as BooleanKeyFrameAnimation
-                 where animation != null
-                 select animation).FirstOrDefault();
+            var animator = visual.Animators.Where(anim => anim.AnimatedProperty == "IsVisible").FirstOrDefault();
 
-            if (visiblityAnimator is null)
+            if (animator is null)
             {
-                // Not animated, or it uses an expression so we can't deal with it.
-                yield break;
+                return (TimeSpan.Zero, Array.Empty<(bool, float)>());
             }
 
-            var firstSeen = false;
+            var visibilityAnimation = (BooleanKeyFrameAnimation)animator.Animation;
 
-            foreach (KeyFrameAnimation<bool, Expr.Boolean>.ValueKeyFrame kf in visiblityAnimator.KeyFrames)
+            return (visibilityAnimation.Duration, GetDescription().ToArray());
+
+            IEnumerable<(bool isVisible, float progress)> GetDescription()
             {
-                if (!firstSeen)
+                if (animator is null)
                 {
-                    firstSeen = true;
-                    if (kf.Progress != 0 && visual.IsVisible.HasValue && !visual.IsVisible.Value)
-                    {
-                        yield return (false, 0);
-                    }
+                    // Not animated, or it uses an expression so we can't deal with it.
+                    yield break;
+                }
 
-                    yield return (kf.Value, kf.Progress);
+                var firstSeen = false;
+
+                foreach (KeyFrameAnimation<bool, Expr.Boolean>.ValueKeyFrame kf in visibilityAnimation.KeyFrames)
+                {
+                    if (!firstSeen)
+                    {
+                        firstSeen = true;
+                        if (kf.Progress != 0 && visual.IsVisible.HasValue && !visual.IsVisible.Value)
+                        {
+                            yield return (false, 0);
+                        }
+
+                        yield return (kf.Value, kf.Progress);
+                    }
                 }
             }
         }
 
-        static IEnumerable<(bool isVisible, float progress)> GetVisiblityAnimationDescription(CompositionShape shape)
+        static (TimeSpan duration, (bool isVisible, float progress)[] sequence) GetVisiblityAnimationDescription(CompositionShape shape)
         {
             var scaleValue = shape.Scale;
 
@@ -1022,29 +1030,35 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
             var firstSeen = false;
             var scaleAnimation = (Vector2KeyFrameAnimation)scaleAnimator.Animation;
-            foreach (KeyFrameAnimation<Vector2, Expr.Vector2>.ValueKeyFrame kf in scaleAnimation.KeyFrames)
+
+            return (scaleAnimation.Duration, GetDescription().ToArray());
+
+            IEnumerable<(bool isVisible, float progress)> GetDescription()
             {
-                if (kf.Easing.Type != CompositionObjectType.StepEasingFunction)
+                foreach (KeyFrameAnimation<Vector2, Expr.Vector2>.ValueKeyFrame kf in scaleAnimation.KeyFrames)
                 {
-                    // The animation is not used for visibility. Precondition.
-                    throw new InvalidOperationException();
-                }
-
-                if (kf.Value != Vector2.One && kf.Value != Vector2.Zero)
-                {
-                    // The animation is not used for visibility. Precondition.
-                    throw new InvalidOperationException();
-                }
-
-                if (!firstSeen)
-                {
-                    firstSeen = true;
-                    if (kf.Progress != 0 && shape.Scale.HasValue && shape.Scale.Value != Vector2.One)
+                    if (kf.Easing.Type != CompositionObjectType.StepEasingFunction)
                     {
-                        yield return (false, 0);
+                        // The animation is not used for visibility. Precondition.
+                        throw new InvalidOperationException();
                     }
 
-                    yield return (kf.Value == Vector2.One, kf.Progress);
+                    if (kf.Value != Vector2.One && kf.Value != Vector2.Zero)
+                    {
+                        // The animation is not used for visibility. Precondition.
+                        throw new InvalidOperationException();
+                    }
+
+                    if (!firstSeen)
+                    {
+                        firstSeen = true;
+                        if (kf.Progress != 0 && shape.Scale.HasValue && shape.Scale.Value != Vector2.One)
+                        {
+                            yield return (false, 0);
+                        }
+
+                        yield return (kf.Value == Vector2.One, kf.Progress);
+                    }
                 }
             }
         }
@@ -1284,7 +1298,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             return result;
         }
 
-        static PropertyId GetNonDefaultProperties(ContainerVisual obj)
+        static PropertyId GetNonDefaultProperties(Visual obj)
         {
             var result = PropertyId.None;
             if (obj.BorderMode.HasValue)
