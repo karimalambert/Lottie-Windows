@@ -75,16 +75,12 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.WriteLine();
         }
 
-        protected override void WritePublicConstants(CodeBuilder builder)
+        protected override void WriteInternalAccessibility(CodeBuilder builder)
         {
-            foreach (var c in SourceInfo.PublicConstants)
-            {
-                builder.WriteLine($"static property float {c.name} {{ float get() {{ return {S.Float(c.value)}; }} }}");
-                builder.WriteLine();
-            }
+            builder.WriteLine("internal:");
         }
 
-        protected override void WritePublicThemeHeader(CodeBuilder builder)
+        protected override void WritePrivatePublicThemeHeader(CodeBuilder builder)
         {
             // Write properties declarations for each themed property.
             foreach (var prop in SourceInfo.SourceMetadata.PropertyBindings)

@@ -881,29 +881,38 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             }
 
             builder.UnIndent();
-            builder.WriteLine("public:");
+            WriteInternalAccessibility(builder);
             builder.Indent();
 
             // Add any public constants.
             if (SourceInfo.PublicConstants.Count > 0)
             {
                 builder.WriteComment("Constants.");
-                WritePublicConstants(builder);
+
+                foreach (var c in SourceInfo.PublicConstants)
+                {
+                    builder.WriteLine($"static constexpr float {c.name}{{ {S.Float(c.value)} }};");
+                    builder.WriteLine();
+                }
             }
 
             if (SourceInfo.IsThemed)
             {
                 // Write properties declarations for each themed property.
                 builder.WriteComment("Theme properties.");
-                WritePublicThemeHeader(builder);
+                WritePrivatePublicThemeHeader(builder);
             }
+
+            builder.UnIndent();
+            builder.WriteLine("public:");
+            builder.Indent();
         }
+
+        protected abstract void WriteInternalAccessibility(CodeBuilder builder);
 
         protected abstract void WritePrivateThemeHeader(CodeBuilder builder);
 
-        protected abstract void WritePublicConstants(CodeBuilder builder);
-
-        protected abstract void WritePublicThemeHeader(CodeBuilder builder);
+        protected abstract void WritePrivatePublicThemeHeader(CodeBuilder builder);
 
         void WriteIAnimatedVisualSourceHeaderText(CodeBuilder builder)
         {

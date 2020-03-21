@@ -484,12 +484,16 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     transform;
 
                 // If the matrix actually does something, set it.
-                if (!combinedMatrix.IsIdentity && combinedMatrix != transform)
+                if (!combinedMatrix.IsIdentity)
                 {
-                    GraphHasChanged();
-                    var transformDescription = DescribeTransform(scale, rotation, offset);
-                    AppendShortDescription(obj, transformDescription);
-                    AppendLongDescription(obj, transformDescription);
+                    if (combinedMatrix != transform)
+                    {
+                        GraphHasChanged();
+                        var transformDescription = DescribeTransform(scale, rotation, offset);
+                        AppendShortDescription(obj, transformDescription);
+                        AppendLongDescription(obj, transformDescription);
+                    }
+
                     obj.TransformMatrix = combinedMatrix;
                 }
             }
@@ -509,7 +513,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 obj.CenterPoint = null;
             }
 
-            /*
             // Convert the properties to a transform matrix. This can reduce the
             // number of calls needed to initialize the object, and makes finding
             // and removing redundant containers easier.
@@ -537,17 +540,19 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     transform;
 
                 // If the matrix actually does something, set it.
-                if (!combinedMatrix.IsIdentity && combinedMatrix != transform)
+                if (!combinedMatrix.IsIdentity)
                 {
-                    GraphHasChanged();
+                    if (combinedMatrix != transform)
+                    {
+                        GraphHasChanged();
+                        var transformDescription = DescribeTransform(scale, rotation, offset);
+                        AppendShortDescription(obj, transformDescription);
+                        AppendLongDescription(obj, transformDescription);
+                    }
 
-                    var transformDescription = DescribeTransform(scale, rotation, offset);
-                    AppendShortDescription(obj, transformDescription);
-                    AppendLongDescription(obj, transformDescription);
                     obj.TransformMatrix = combinedMatrix;
                 }
             }
-            */
         }
 
         static float DegreesToRadians(float angle) => (float)(Math.PI * angle / 180.0);
@@ -1197,8 +1202,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             // Pull the children of the container into the parent of the container. Remove the unnecessary containers.
             foreach (var (node, obj) in containersWithNoPropertiesSet)
             {
-                GraphHasChanged();
-
                 var container = (ContainerVisual)obj;
 
                 // Insert the children into the parent.
@@ -1223,6 +1226,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     // the container is for a layer type that we don't support.
                     continue;
                 }
+
+                GraphHasChanged();
 
                 // Insert the first child where the container was.
                 var child0 = children[0];
