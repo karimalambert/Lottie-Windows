@@ -6,7 +6,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
     readonly struct ColumnData
     {
         ColumnData(string text, TextAlignment alignment, int span)
-            => (Text, Alignment, Span) = (text, alignment, span);
+            => (Text, Alignment, Span) = (text ?? string.Empty, alignment, span);
 
         internal static ColumnData Create(string text, TextAlignment alignment, int span)
             => new ColumnData(text, alignment, span);
@@ -26,7 +26,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
         internal static ColumnData Create(int value)
              => new ColumnData(value.ToString(), TextAlignment.Right, 1);
 
-        internal static ColumnData Empty => ColumnData.Create(string.Empty);
+        internal static ColumnData Empty => Create(string.Empty);
 
         internal string Text { get; }
 

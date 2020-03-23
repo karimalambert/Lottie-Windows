@@ -4,7 +4,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
 using System.Text;
@@ -76,6 +75,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
         void OptimizeVisuals(ObjectGraph<Node> graph)
         {
+            PushVisualVisibilityUp(graph);
             PushPropertiesDownToShapeVisual(graph);
             CoalesceContainerVisuals(graph);
             CoalesceOrthogonalVisuals(graph);
@@ -854,6 +854,56 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             }
         }
 
+        // Finds chains of Visuals and moves the IsVisible property and
+        // animation up to the top of the chain.
+        void PushVisualVisibilityUp(ObjectGraph<Node> graph)
+        {
+            var visualsWithSingleParents = graph.CompositionObjectNodes.Where(n =>
+                n.Object is Visual &&
+                n.Node.Parent != null &&
+                ((ContainerVisual)n.Node.Parent).Children.Count == 1).Select(x => (x.Node, (Visual)x.Object)).ToArray();
+
+            foreach (var (node, visual) in visualsWithSingleParents)
+            {
+                var visibilityController = visual.TryGetAnimationController("IsVisible");
+                if (visibilityController != null)
+                {
+                    ApplyVisibility((Visual)node.Object, GetVisiblityAnimationDescription(visual), visibilityController.Animators.Where(anim => anim.AnimatedProperty == "Progress").FirstOrDefault().Animation);
+
+                    // Clear out the visibility property and animation from the visual.
+                    visual.IsVisible = null;
+                    visual.StopAnimation("IsVisible");
+                }
+            }
+        }
+
+        static VisibilityDescription ComposeVisibilities(in VisibilityDescription a, in VisibilityDescription b)
+        {
+            if (a.Sequence.Length == 0)
+            {
+                return b;
+            }
+
+            if (b.Sequence.Length == 0)
+            {
+                return a;
+            }
+
+            if (a.Duration != b.Duration)
+            {
+                throw new InvalidOperationException();
+            }
+
+            if (a.Sequence.SequenceEqual(b.Sequence))
+            {
+                // They're identical.
+                return a;
+            }
+
+            // TODO - combine the sequences. Need to find an example to test with.
+            throw new InvalidOperationException();
+        }
+
         // Find ContainerVisuals that have a single ShapeVisual child with orthongonal properties and
         // push the properties down to the ShapeVisual
         static void PushPropertiesDownToShapeVisual(ObjectGraph<Node> graph)
@@ -912,7 +962,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
         // Finds ShapeVisuals with a single shape that has a visibility animation and
         // move the animation into the ShapeVisual.
-        static void PushShapeTreeVisibilityIntoVisualTree(ObjectGraph<Node> graph)
+        void PushShapeTreeVisibilityIntoVisualTree(ObjectGraph<Node> graph)
         {
             var candidate =
                 (from n in graph.CompositionObjectNodes
@@ -924,48 +974,12 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
             foreach (var visual in candidate)
             {
-                // TODO
-                // Get the visbility animation as a sequence of (bool,progress).
-                // Remove the visibility animation from the shape.
-                // Get the visibility animation from the shape visual as a sequence
-                // Convert to a new visibility animation. Apply it to the shape visual
                 var shape = visual.Shapes[0];
-                var visualVisibility = GetVisiblityAnimationDescription(visual);
-                var shapeVisibility = GetVisiblityAnimationDescription(shape);
 
-                Debug.Assert(shapeVisibility.sequence.Length > 0, "Checked above");
-
-                if (visualVisibility.sequence.Length == 0)
+                var visibilityController = shape.TryGetAnimationController("Scale");
+                if (visibilityController != null)
                 {
-                    // Easy case - the visual isn't being used for visibility.
-                    var c = new Compositor();
-                    var animation = c.CreateBooleanKeyFrameAnimation();
-                    animation.Duration = shapeVisibility.duration;
-                    if (shapeVisibility.sequence[0].progress == 0)
-                    {
-                        // Set the initial visiblity.
-                        visual.IsVisible = shapeVisibility.sequence[0].isVisible;
-                    }
-
-                    foreach (var visibility in shapeVisibility.sequence)
-                    {
-                        if (visibility.progress == 0)
-                        {
-                            // The 0 progress value is already handled.
-                            continue;
-                        }
-                        else
-                        {
-                            animation.InsertKeyFrame(visibility.progress, visibility.isVisible);
-                        }
-                    }
-
-                    visual.StartAnimation("IsVisible", animation);
-
-                    var progressAnimation = shape.TryGetAnimationController("Scale").Animators.Where(anim => anim.AnimatedProperty == "Progress").First().Animation;
-                    var controller = visual.TryGetAnimationController("IsVisible");
-                    controller.Pause();
-                    controller.StartAnimation("Progress", progressAnimation);
+                    ApplyVisibility(visual, GetVisiblityAnimationDescription(shape), visibilityController.Animators.Where(anim => anim.AnimatedProperty == "Progress").FirstOrDefault().Animation);
 
                     // Clear out the Scale properties and animations from the shape.
                     shape.Scale = null;
@@ -974,7 +988,48 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             }
         }
 
-        static (TimeSpan duration, (bool isVisible, float progress)[] sequence) GetVisiblityAnimationDescription(Visual visual)
+        // Applies the given visibility to the given Visual, combining it with the
+        // visibility it already has.
+        void ApplyVisibility(Visual to, VisibilityDescription fromVisibility, CompositionAnimation progressAnimation)
+        {
+            var toVisibility = GetVisiblityAnimationDescription(to);
+
+            var compositeVisibility = ComposeVisibilities(fromVisibility, toVisibility);
+
+            if (compositeVisibility.Sequence.Length > 0)
+            {
+                _madeProgress = true;
+                var c = new Compositor();
+                var animation = c.CreateBooleanKeyFrameAnimation();
+                animation.Duration = compositeVisibility.Duration;
+                if (compositeVisibility.Sequence[0].progress == 0)
+                {
+                    // Set the initial visiblity.
+                    to.IsVisible = compositeVisibility.Sequence[0].isVisible;
+                }
+
+                foreach (var keyFrame in compositeVisibility.Sequence)
+                {
+                    if (keyFrame.progress == 0)
+                    {
+                        // The 0 progress value is already handled.
+                        continue;
+                    }
+                    else
+                    {
+                        animation.InsertKeyFrame(keyFrame.progress, keyFrame.isVisible);
+                    }
+                }
+
+                to.StartAnimation("IsVisible", animation);
+
+                var controller = to.TryGetAnimationController("IsVisible");
+                controller.Pause();
+                controller.StartAnimation("Progress", progressAnimation);
+            }
+        }
+
+        static VisibilityDescription GetVisiblityAnimationDescription(Visual visual)
         {
             // Get the visibility animation.
             // TODO - this needs to take the controller's Progress expression into account.
@@ -982,12 +1037,12 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
             if (animator is null)
             {
-                return (TimeSpan.Zero, Array.Empty<(bool, float)>());
+                return new VisibilityDescription(TimeSpan.Zero, Array.Empty<(bool, float)>());
             }
 
             var visibilityAnimation = (BooleanKeyFrameAnimation)animator.Animation;
 
-            return (visibilityAnimation.Duration, GetDescription().ToArray());
+            return new VisibilityDescription(visibilityAnimation.Duration, GetDescription().ToArray());
 
             IEnumerable<(bool isVisible, float progress)> GetDescription()
             {
@@ -1015,7 +1070,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             }
         }
 
-        static (TimeSpan duration, (bool isVisible, float progress)[] sequence) GetVisiblityAnimationDescription(CompositionShape shape)
+        static VisibilityDescription GetVisiblityAnimationDescription(CompositionShape shape)
         {
             var scaleValue = shape.Scale;
 
@@ -1036,7 +1091,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             var firstSeen = false;
             var scaleAnimation = (Vector2KeyFrameAnimation)scaleAnimator.Animation;
 
-            return (scaleAnimation.Duration, GetDescription().ToArray());
+            return new VisibilityDescription(scaleAnimation.Duration, GetDescription().ToArray());
 
             IEnumerable<(bool isVisible, float progress)> GetDescription()
             {
@@ -1815,6 +1870,16 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             }
 
             return sb.ToString();
+        }
+
+        readonly struct VisibilityDescription
+        {
+            internal VisibilityDescription(TimeSpan duration, (bool isVisible, float progress)[] sequence)
+                => (Duration, Sequence) = (duration, sequence);
+
+            internal TimeSpan Duration { get; }
+
+            internal (bool isVisible, float progress)[] Sequence { get; }
         }
 
         sealed class Node : Graph.Node<Node>

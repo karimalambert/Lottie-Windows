@@ -115,6 +115,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData
         /// <param name="animation">The animation.</param>
         public void StartAnimation(string target, CompositionAnimation animation)
         {
+            // Remove any existing animation.
+            StopAnimation(target);
+
             // Clone the animation so that the existing animation object can be reconfigured.
             // If the animation is frozen, it is safe to not do the clone.
             var clone = animation.IsFrozen ? animation : animation.Clone();
@@ -154,7 +157,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData
         public IReadOnlyList<Animator> Animators => _animators;
 
         public AnimationController TryGetAnimationController(string target) =>
-            _animators.Where(a => a.AnimatedProperty == target).Single().Controller;
+            _animators.Where(a => a.AnimatedProperty == target).SingleOrDefault()?.Controller;
 
         public abstract CompositionObjectType Type { get; }
 
