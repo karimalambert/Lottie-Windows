@@ -13,8 +13,7 @@ using Expr = Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.Expressions;
 namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 {
     /// <summary>
-    /// Optimizes a <see cref="Visual"/> tree by combining and removing containers and
-    /// removing containers that are empty.
+    /// Optimizes a <see cref="Visual"/> tree by combining and removing containers.
     /// </summary>
     sealed class GraphCompactor
     {
@@ -24,7 +23,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
         {
         }
 
-        internal static Visual OptimizeContainers(Visual root)
+        internal static Visual Compact(Visual root)
         {
             // Running the optimization multiple times can improve the results.
             // Keep iterating as long as we are making progress.
@@ -35,7 +34,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
                 var graph = ObjectGraph<Node>.FromCompositionObject(root, includeVertices: true);
 
-                compactor.Optimize(graph);
+                compactor.Compact(graph);
             } while (compactor._madeProgress);
 
             return root;
@@ -43,7 +42,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
         void GraphHasChanged() => _madeProgress = true;
 
-        void Optimize(ObjectGraph<Node> graph)
+        void Compact(ObjectGraph<Node> graph)
         {
             // Discover the parents of each container
             foreach (var node in graph.CompositionObjectNodes)
@@ -868,7 +867,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 var visibilityController = visual.TryGetAnimationController("IsVisible");
                 if (visibilityController != null)
                 {
-                    ApplyVisibility((Visual)node.Object, GetVisiblityAnimationDescription(visual), visibilityController.Animators.Where(anim => anim.AnimatedProperty == "Progress").FirstOrDefault().Animation);
+                    ApplyVisibility((Visual)node.Parent, GetVisiblityAnimationDescription(visual), visibilityController.Animators.Where(anim => anim.AnimatedProperty == "Progress").FirstOrDefault().Animation);
 
                     // Clear out the visibility property and animation from the visual.
                     visual.IsVisible = null;
@@ -900,8 +899,54 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 return a;
             }
 
-            // TODO - combine the sequences. Need to find an example to test with.
-            throw new InvalidOperationException();
+            // Combine and optimize the 2 sequences.
+            var composedSequence = ComposeVisibilitySequences(a.Sequence, b.Sequence).ToArray();
+
+            return new VisibilityDescription(a.Duration, composedSequence);
+        }
+
+        // Composes 2 visibility sequence.
+        static IEnumerable<(bool isVisible, float progress)> ComposeVisibilitySequences(
+                                                                (bool isVisible, float progress)[] a,
+                                                                (bool isVisible, float progress)[] b)
+        {
+            var currentVisibility = false;
+            var currentProgress = 0F;
+
+            var ai = 0;
+            var bi = 0;
+
+            while (ai < a.Length || bi < b.Length)
+            {
+                var cura = ai < a.Length ? a[ai] : (a[a.Length - 1].isVisible, progress: float.MaxValue);
+                var curb = bi < b.Length ? b[bi] : (b[b.Length - 1].isVisible, progress: float.MaxValue);
+
+                // Is the visibility changing?
+                if ((cura.isVisible & curb.isVisible) != currentVisibility)
+                {
+                    yield return (currentVisibility, currentProgress);
+                    currentVisibility = !currentVisibility;
+                }
+
+                if (cura.progress == curb.progress)
+                {
+                    currentProgress = cura.progress;
+                    ai++;
+                    bi++;
+                }
+                else if (cura.progress < curb.progress)
+                {
+                    currentProgress = cura.progress;
+                    ai++;
+                }
+                else
+                {
+                    currentProgress = curb.progress;
+                    bi++;
+                }
+            }
+
+            yield return (currentVisibility, currentProgress);
         }
 
         // Find ContainerVisuals that have a single ShapeVisual child with orthongonal properties and

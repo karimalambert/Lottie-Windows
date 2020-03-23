@@ -144,7 +144,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 return
                     from item in items
                     let obj = item.Object
-                    where (_ignoreCommentProperties || obj.Comment == null)
+                    where (_ignoreCommentProperties || obj.Comment is null)
                        && obj.Properties.Names.Count == 0
                        && obj.Animators.Count == 0
                     select (item.Node, obj);
@@ -193,13 +193,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             }
 
             void CanonicalizeKeyFrameAnimations<TKFA, TExpression>(CompositionObjectType animationType)
-                where TExpression : Expr.Expression_<TExpression>
+                where TExpression : Expression_<TExpression>
                 => CanonicalizeKeyFrameAnimations<TKFA, TExpression>(animationType, SimpleEqualityComparer<TKFA>);
 
             void CanonicalizeKeyFrameAnimations<TKFA, TExpression>(
                 CompositionObjectType animationType,
                 Func<TKFA, TKFA, bool> equalityComparer)
-                where TExpression : Expr.Expression_<TExpression>
+                where TExpression : Expression_<TExpression>
             {
                 var items = GetCanonicalizableCompositionObjects<KeyFrameAnimation<TKFA, TExpression>>(animationType);
 
@@ -220,7 +220,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 => a.Equals(b);
 
             sealed class KeyFrameAnimationKey<TKFA, TExpression>
-                where TExpression : Expr.Expression_<TExpression>
+                where TExpression : Expression_<TExpression>
             {
                 readonly CanonicalizerWorker<TNode> _owner;
                 readonly KeyFrameAnimation<TKFA, TExpression> _obj;
@@ -249,13 +249,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                         return true;
                     }
 
-                    if (obj == null)
-                    {
-                        return false;
-                    }
-
                     var other = obj as KeyFrameAnimationKey<TKFA, TExpression>;
-                    if (other == null)
+                    if (other is null)
                     {
                         return false;
                     }
@@ -340,7 +335,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 var items =
                     from item in nodes
                     let obj = item.Object
-                    where (_ignoreCommentProperties || obj.Comment == null)
+                    where (_ignoreCommentProperties || obj.Comment is null)
                        && obj.Properties.Names.Count == 0
                     select (item.Node, obj);
 
@@ -350,7 +345,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     let animators = obj.Animators.ToArray()
                     where animators.Length == 0 || (animators.Length == 1 && animators[0].AnimatedProperty == "Color")
                     let animator = animators.FirstOrDefault()
-                    let canonicalAnimator = animator == null ? null : CanonicalObject<CompositionAnimation>(animator.Animation)
+                    let canonicalAnimator = animator is null ? null : CanonicalObject<CompositionAnimation>(animator.Animation)
                     group item.Node by (obj.Color, canonicalAnimator) into grouped
                     select grouped;
 
@@ -366,8 +361,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 var items =
                     from item in nodes
                     let obj = item.Object
-                    where (_ignoreCommentProperties || obj.Comment == null)
-                        && obj.Color == null
+                    where (_ignoreCommentProperties || obj.Comment is null)
+                        && obj.Color is null
                         && obj.Properties.Names.Count == 1
                     select (item.Node, obj);
 
@@ -503,7 +498,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 var nonAnimatedStopsWithIndex =
                     from b in gradientBrushes
                     let nonAnimatedStops = from s in b.Object.ColorStops
-                                           where (_ignoreCommentProperties || s.Comment == null)
+                                           where (_ignoreCommentProperties || s.Comment is null)
                                               && s.Properties.Names.Count == 0 && !s.Animators.Any()
                                            group s by (s.Color, s.Offset) into g
                                            from s2 in g.Zip(PositiveInts, (x, y) => (Stop: x, Index: y))
@@ -530,7 +525,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 var items =
                     from item in nodes
                     let obj = item.Object
-                    where (_ignoreCommentProperties || obj.Comment == null)
+                    where (_ignoreCommentProperties || obj.Comment is null)
                        && obj.Properties.Names.Count == 0
                     select (item.Node, obj);
 
@@ -626,7 +621,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 var items =
                     from item in GetCompositionObjects<CompositionPathGeometry>(CompositionObjectType.CompositionPathGeometry)
                     let obj = item.Object
-                    where (_ignoreCommentProperties || obj.Comment == null)
+                    where (_ignoreCommentProperties || obj.Comment is null)
                        && obj.Properties.Names.Count == 0
                        && obj.Animators.Count == 1
                     let animator = obj.Animators[0]

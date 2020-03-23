@@ -103,8 +103,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             {
                 // For some animations, we can include a description of the start and end values
                 // to make the names more descriptive.
-                CompositionObjectType.BooleanKeyFrameAnimation
-                    => NodeName.FromNameAndDescription("BooleanAnimation", DescribeAnimationRange((BooleanKeyFrameAnimation)obj)),
                 CompositionObjectType.ColorKeyFrameAnimation
                     => NodeName.FromNameAndDescription("ColorAnimation", DescribeAnimationRange((ColorKeyFrameAnimation)obj)),
                 CompositionObjectType.ScalarKeyFrameAnimation
@@ -115,6 +113,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 CompositionObjectType.Vector2KeyFrameAnimation => NodeName.FromNonTypeName($"{TryGetAnimatedPropertyName(node)}Vector2Animation"),
                 CompositionObjectType.Vector3KeyFrameAnimation => NodeName.FromNonTypeName($"{TryGetAnimatedPropertyName(node)}Vector3Animation"),
                 CompositionObjectType.Vector4KeyFrameAnimation => NodeName.FromNonTypeName($"{TryGetAnimatedPropertyName(node)}Vector4Animation"),
+
+                // Boolean animations don't have interesting range descriptions, but their property name
+                // is helpful to know (it is typically "IsVisible").
+                CompositionObjectType.BooleanKeyFrameAnimation => NodeName.FromNonTypeName($"{TryGetAnimatedPropertyName(node)}BooleanAnimation"),
 
                 // Geometries include their size as part of the description.
                 CompositionObjectType.CompositionRectangleGeometry

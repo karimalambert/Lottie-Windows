@@ -1006,6 +1006,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
                 // Animate between Scale(0,0) and Scale(1,1).
                 var visibilityAnimation = _c.CreateVector2KeyFrameAnimation();
+
+                Name(visibilityAnimation, "ShapeVisibilityAnimation");
+
                 if (inProgress > 0)
                 {
                     // Set initial value to be non-visible (default is visible).
