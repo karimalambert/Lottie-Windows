@@ -2798,7 +2798,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                 }
                 else
                 {
-                    sprite.StrokeThickness = Float(strokeThickness.InitialValue);
+                    sprite.StrokeThickness = FloatDefaultIsOne(strokeThickness.InitialValue);
                 }
             }
 
@@ -2806,7 +2806,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
             sprite.StrokeLineJoin = StrokeLineJoin(shapeStroke.JoinType);
 
-            sprite.StrokeMiterLimit = Float(shapeStroke.MiterLimit);
+            // Lottie (and SVG/CSS) defines miter limit as (miter_length / stroke_thickness).
+            // WUC defines miter limit as (miter_length / (2*stroke_thickness).
+            // WUC requires the value not be < 1.
+            sprite.StrokeMiterLimit = FloatDefaultIsOne(Math.Max(shapeStroke.MiterLimit / 2, 1));
 
             sprite.StrokeBrush = brush;
         }

@@ -1449,6 +1449,14 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 }
             }
 
+            void WritePropertySetStatementDefaultIsOne(CodeBuilder builder, string propertyName, float? value, string target = "result")
+            {
+                if (value.HasValue && value.Value != 1)
+                {
+                    WritePropertySetStatement(builder, propertyName, Float(value.Value), target);
+                }
+            }
+
             void WritePropertySetStatement(CodeBuilder builder, string propertyName, float value, string target = "result")
                  => WritePropertySetStatement(builder, propertyName, Float(value), target);
 
@@ -3009,15 +3017,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     WritePropertySetStatement(builder, "StrokeStartCap", StrokeCap(obj.StrokeStartCap));
                 }
 
-                if (obj.StrokeMiterLimit != 1)
-                {
-                    WritePropertySetStatement(builder, "StrokeMiterLimit", obj.StrokeMiterLimit);
-                }
-
-                if (obj.StrokeThickness != 1)
-                {
-                    WritePropertySetStatement(builder, "StrokeThickness", obj.StrokeThickness);
-                }
+                WritePropertySetStatementDefaultIsOne(builder, "StrokeMiterLimit", obj.StrokeMiterLimit);
+                WritePropertySetStatementDefaultIsOne(builder, "StrokeThickness", obj.StrokeThickness);
 
                 StartAnimationsOnResult(builder, obj, node);
                 WriteObjectFactoryEnd(builder);

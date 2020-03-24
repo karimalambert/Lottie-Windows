@@ -36,9 +36,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData
 
         public CompositionStrokeCap StrokeStartCap { get; set; } = CompositionStrokeCap.Flat;
 
-        public float StrokeMiterLimit { get; set; } = 1;
+        // Default is 1.
+        public float? StrokeMiterLimit { get; set; }
 
-        public float StrokeThickness { get; set; } = 1;
+        // Default is 1.
+        public float? StrokeThickness { get; set; }
 
         /// <inheritdoc/>
         public override CompositionObjectType Type => CompositionObjectType.CompositionSpriteShape;

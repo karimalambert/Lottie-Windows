@@ -1160,15 +1160,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     result.StrokeEndCap = obj.StrokeEndCap;
                 }
 
-                if (obj.StrokeThickness != 1)
-                {
-                    result.StrokeThickness = obj.StrokeThickness;
-                }
+                result.StrokeThickness = obj.StrokeThickness;
 
-                if (obj.StrokeMiterLimit != 1)
-                {
-                    result.StrokeMiterLimit = obj.StrokeMiterLimit;
-                }
+                result.StrokeMiterLimit = obj.StrokeMiterLimit;
 
                 if (obj.StrokeLineJoin != CompositionStrokeLineJoin.Miter)
                 {
