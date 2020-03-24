@@ -887,6 +887,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         static IEnumerable<ObjectData> OrderByName(IEnumerable<ObjectData> nodes) =>
             nodes.OrderBy(n => n.Name, AlphanumericStringComparer.Instance);
 
+        // Orders nodes by their type name, then by their name using alpha-numeric ordering
+        // (which is the most natural ordering for code names that contain embedded numbers).
+        static IEnumerable<ObjectData> OrderByTypeThenName(IEnumerable<ObjectData> nodes) =>
+            nodes.OrderBy(n => n.TypeName).ThenBy(n => n.Name, AlphanumericStringComparer.Instance);
+
         static string PropertySetValueTypeName(PropertySetValueType value)
             => value switch
             {
@@ -1597,13 +1602,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             void WriteFields(CodeBuilder builder)
             {
-                foreach (var node in OrderByName(_nodes.Where(n => n.RequiresReadonlyStorage)))
+                foreach (var node in OrderByTypeThenName(_nodes.Where(n => n.RequiresReadonlyStorage)))
                 {
                     // Generate a field for the read-only storage.
                     _owner.WriteDefaultInitializedField(builder, Readonly(_s.ReferenceTypeName(node.TypeName)), node.FieldName);
                 }
 
-                foreach (var node in OrderByName(_nodes.Where(n => n.RequiresStorage && !n.RequiresReadonlyStorage)))
+                foreach (var node in OrderByTypeThenName(_nodes.Where(n => n.RequiresStorage && !n.RequiresReadonlyStorage)))
                 {
                     // Generate a field for the non-read-only storage.
                     _owner.WriteDefaultInitializedField(builder, _s.ReferenceTypeName(node.TypeName), node.FieldName);
