@@ -10,12 +10,12 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
 {
     sealed class GraphStatsMonospaceTableFormatter : MonospaceTableFormatter
     {
-        internal static string[] GetGraphStatsLines(IEnumerable<(string name, IEnumerable<object> objects)> objects)
+        internal static IEnumerable<string> GetGraphStatsLines(IEnumerable<(string name, IEnumerable<object> objects)> objects)
         {
             var objs = objects.ToArray();
 
-            var header = new ColumnData[1 + objs.Length];
-            header[0] = ColumnData.Create("Object stats");
+            var headerColumns = new ColumnData[1 + objs.Length];
+            headerColumns[0] = ColumnData.Create("Object stats");
             for (var i = 0; i < objs.Length; i++)
             {
                 var name = objs[i].name;
@@ -28,7 +28,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
                     name += " count";
                 }
 
-                header[i + 1] = ColumnData.Create(name);
+                headerColumns[i + 1] = ColumnData.Create(name);
             }
 
             var compositionObjects =
@@ -37,29 +37,33 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
                          where o is CompositionObject
                          select (CompositionObject)o).ToArray()).ToArray();
 
-            var records = new[] {
+            var rows = new[] {
+                Row.HeaderTop,
+                new Row.ColumnData(headerColumns),
+                Row.HeaderBottom,
                 GetCompositionObjectCountRecord(compositionObjects, "All CompositionObjects", (o) => true),
-                null,
+                Row.Separator,
                 GetAnimatorCountRecord(compositionObjects),
                 GetCompositionObjectCountRecord(compositionObjects, "Animated brushes", (o) => o is CompositionBrush b && b.Animators.Count > 0),
                 GetCompositionObjectCountRecord(compositionObjects, "Animated gradient stops", (o) => o is CompositionColorGradientStop s && s.Animators.Count > 0),
                 GetCompositionObjectCountRecord(compositionObjects, "ExpressionAnimations", (o) => o.Type == CompositionObjectType.ExpressionAnimation),
-                null,
+                Row.Separator,
                 GetCompositionObjectCountRecord(compositionObjects, "ContainerVisuals", (o) => o.Type == CompositionObjectType.ContainerVisual),
                 GetCompositionObjectCountRecord(compositionObjects, "ShapeVisuals", (o) => o.Type == CompositionObjectType.ShapeVisual),
-                null,
+                Row.Separator,
                 GetCompositionObjectCountRecord(compositionObjects, "ContainerShapes", (o) => o.Type == CompositionObjectType.CompositionContainerShape),
                 GetCompositionObjectCountRecord(compositionObjects, "CompositionSpriteShapes", (o) => o.Type == CompositionObjectType.CompositionSpriteShape),
-                null,
+                Row.Separator,
                 GetCompositionObjectCountRecord(compositionObjects, "Brushes", (o) => o is CompositionBrush),
                 GetCompositionObjectCountRecord(compositionObjects, "Gradient stops", (o) => o is CompositionColorGradientStop),
                 GetCompositionObjectCountRecord(compositionObjects, "CompositionVisualSurface", (o) => o is CompositionVisualSurface),
+                Row.BodyBottom,
             };
 
-            return GetTableLines(new[] { header }, records).ToArray();
+            return GetTableLines(rows);
         }
 
-        static ColumnData[] GetCompositionObjectCountRecord(
+        static Row GetCompositionObjectCountRecord(
             CompositionObject[][] objects,
             string name,
             Func<CompositionObject, bool> filter)
@@ -73,10 +77,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
                 result[i + 1] = ColumnData.Create(count == 0 ? "-" : count.ToString(), TextAlignment.Right);
             }
 
-            return result;
+            return new Row.ColumnData(result);
         }
 
-        static ColumnData[] GetAnimatorCountRecord(CompositionObject[][] objects)
+        static Row GetAnimatorCountRecord(CompositionObject[][] objects)
         {
             var result = new ColumnData[objects.Length + 1];
             result[0] = ColumnData.Create("Animators", TextAlignment.Left);
@@ -87,7 +91,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
                 result[i + 1] = ColumnData.Create(count);
             }
 
-            return result;
+            return new Row.ColumnData(result);
         }
     }
 }

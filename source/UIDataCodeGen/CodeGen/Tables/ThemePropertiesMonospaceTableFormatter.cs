@@ -4,13 +4,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen;
 
 namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
 {
     sealed class ThemePropertiesMonospaceTableFormatter : MonospaceTableFormatter
     {
-        internal static string[] GetThemePropertyDescriptionLines(IEnumerable<PropertyBinding> names)
+        internal static IEnumerable<string> GetThemePropertyDescriptionLines(IEnumerable<PropertyBinding> names)
         {
             if (names is null)
             {
@@ -18,20 +17,25 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
             }
 
             var header = new[] {
-                ColumnData.Create("Theme property"),
-                ColumnData.Create("Type"),
-                ColumnData.Create("Exposed as"),
-            };
+                Row.HeaderTop,
+                new Row.ColumnData(
+                        ColumnData.Create("Theme property"),
+                        ColumnData.Create("Type"),
+                        ColumnData.Create("Exposed as")),
+                Row.HeaderBottom,
+                };
 
             var records =
                 (from name in names
-                 select new[] {
+                 select new Row.ColumnData(
                      ColumnData.Create(name.Name, TextAlignment.Left, 1),
                      ColumnData.Create(name.ExposedType.ToString()),
-                     ColumnData.Create(name.ActualType.ToString()),
-                 }).ToArray();
+                     ColumnData.Create(name.ActualType.ToString())
+                 )).ToArray();
 
-            return GetTableLines(new[] { header }, records).ToArray();
+            var rows = header.Concat(records).Append(Row.BodyBottom);
+
+            return GetTableLines(rows);
         }
     }
 }

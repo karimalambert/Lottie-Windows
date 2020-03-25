@@ -14,56 +14,62 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
     // that is specific to a particular data set.
     abstract class MonospaceTableFormatter
     {
-        protected static IEnumerable<string> GetTableLines(
-            ColumnData[][] headers,
-            ColumnData[][] rows)
+        protected static IEnumerable<string> GetTableLines(IEnumerable<Row> rows)
         {
-            if (rows.Length == 0)
-            {
-                yield break;
-            }
-
-            // Get the width of each column. If a column spans more than one
-            // column, add 1 extra to account for the space that would otherwise
-            // be taken up by each column separator.
+            // Get the width of each column in each row and find the maximum width
+            // required by each column.
             var columnWidths =
-                (from row in headers.Concat(rows)
+                (from row in rows.Select(r => GetRequiredMinimumWidths(r))
                  where row != null
-                 select (from col in row
-                         let width = col.Text.Length + col.Span + 1
-                         select width).ToArray()
-                 ).Aggregate((w1, w2) => w1.Select((w, i) => Math.Max(w2[i], w)).ToArray()).ToArray();
+                 select row).Aggregate((w1, w2) => w1.Select((w, i) => Math.Max(w2[i], w)).ToArray()).ToArray();
 
             // The total width includes space for the column separators.
             var totalWidth = columnWidths.Sum() + columnWidths.Length - 1;
 
-            // Output a line at the top of the table.
-            yield return new string('_', totalWidth + 2);
-
-            // Output the headers.
-            foreach (var header in headers)
-            {
-                yield return FormatRow(header.Select((x, i) => (x, columnWidths[i])));
-            }
-
-            // Output a ruler line between the headers and the rows.
-            yield return $"|{string.Join("|", columnWidths.Select(w => new string('_', w)))}|";
-
             foreach (var r in rows)
             {
-                if (r is null)
+                switch (r.Type)
                 {
-                    // A null is a request to insert a row separator.
-                    yield return $"|{string.Join('+', columnWidths.Select(w => new string('-', w)))}|";
-                }
-                else
-                {
-                    yield return FormatRow(r.Select((x, i) => (x, columnWidths[i])));
+                    case Row.RowType.ColumnData:
+                        yield return FormatRow(((Row.ColumnData)r).Columns.Select((x, i) => (x, columnWidths[i])));
+                        break;
+                    case Row.RowType.HeaderTop:
+                        yield return new string('_', totalWidth + 2);
+                        break;
+                    case Row.RowType.HeaderBottom:
+                        yield return $"|{string.Join("|", columnWidths.Select(w => new string('_', w)))}|";
+                        break;
+                    case Row.RowType.BodyBottom:
+                        yield return new string('-', totalWidth + 2);
+                        break;
+                    case Row.RowType.Separator:
+                        yield return $"|{string.Join('+', columnWidths.Select(w => new string('-', w)))}|";
+                        break;
+                    default:
+                        throw new InvalidOperationException();
                 }
             }
+        }
 
-            // Output a line at the bottom of the table.
-            yield return new string('-', totalWidth + 2);
+        static int[] GetRequiredMinimumWidths(Row row)
+        {
+            switch (row.Type)
+            {
+                case Row.RowType.ColumnData:
+                    var columnDataRow = (Row.ColumnData)row;
+
+                    // Columns that span more than one column get an extra space that
+                    // would otherwise be taken up by each column separator.
+                    return columnDataRow.Columns.Select(c => c.Text.Length + c.Span + 1).ToArray();
+                case Row.RowType.HeaderTop:
+                case Row.RowType.HeaderBottom:
+                case Row.RowType.BodyBottom:
+                case Row.RowType.Separator:
+                    // Null indicates "don't care".
+                    return null;
+                default:
+                    throw new InvalidOperationException();
+            }
         }
 
         static string Align(string str, int width, TextAlignment alignment)
@@ -102,7 +108,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
             }
         }
 
-        static string FormatRow(IEnumerable<(ColumnData data, int width)> rowData)
+        static string FormatRow(IEnumerable<(ColumnData data, int requiredWidth)> rowData)
         {
             var sb = new StringBuilder();
 
@@ -111,7 +117,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
             TextAlignment spanAlignment = default(TextAlignment);
             int spanCountdown = -1;
 
-            foreach (var (column, width) in rowData)
+            foreach (var (column, requiredWidth) in rowData)
             {
                 if (spanCountdown == 0)
                 {
@@ -123,7 +129,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
                 else if (spanCountdown > 0)
                 {
                     // Accumulate the width and otherwise ignore this column.
-                    spanWidth += width + 1;
+                    spanWidth += requiredWidth + 1;
                     spanCountdown--;
                     continue;
                 }
@@ -132,7 +138,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
                 {
                     // Output the column.
                     sb.Append("|");
-                    sb.Append(Align(column.Text, width, column.Alignment));
+                    sb.Append(Align(column.Text, requiredWidth, column.Alignment));
                 }
                 else
                 {
@@ -141,7 +147,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
                     spanCountdown = column.Span - 1;
                     spanText = column.Text;
                     spanAlignment = column.Alignment;
-                    spanWidth = width;
+                    spanWidth = requiredWidth;
                 }
             }
 
