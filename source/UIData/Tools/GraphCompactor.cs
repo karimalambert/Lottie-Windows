@@ -17,6 +17,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
     /// </summary>
     sealed class GraphCompactor
     {
+        static IReadOnlyDictionary<string, PropertyId> s_propertyIdFromNameMap;
         bool _madeProgress;
 
         GraphCompactor()
@@ -424,12 +425,17 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 switch (obj.Type)
                 {
                     case CompositionObjectType.ContainerVisual:
+                    case CompositionObjectType.SpriteVisual:
                     case CompositionObjectType.ShapeVisual:
-                        SimplifyProperties((Visual)obj);
+                        SimplifyVisualProperties((Visual)obj);
                         break;
-                    case CompositionObjectType.CompositionContainerShape:
+
                     case CompositionObjectType.CompositionSpriteShape:
-                        SimplifyProperties((CompositionShape)obj);
+                        SimplifySpriteShapeProperties((CompositionSpriteShape)obj);
+                        break;
+
+                    case CompositionObjectType.CompositionContainerShape:
+                        SimplifyShapeProperties((CompositionShape)obj);
                         break;
                 }
             }
@@ -437,9 +443,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
         // Remove the CenterPoint and RotationAxis properties if they're redundant,
         // and convert properties to TransformMatrix if possible.
-        void SimplifyProperties(Visual obj)
+        void SimplifyVisualProperties(Visual obj)
         {
-            var nonDefaultProperties = GetNonDefaultProperties(obj);
+            var nonDefaultProperties = GetNonDefaultVisualProperties(obj);
             if (obj.CenterPoint.HasValue &&
                 ((nonDefaultProperties & (PropertyId.RotationAngleInDegrees | PropertyId.Scale)) == PropertyId.None))
             {
@@ -499,10 +505,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
         }
 
         // Remove the centerpoint property if it's redundant, and convert properties to TransformMatrix if possible.
-        void SimplifyProperties(CompositionShape obj)
+        void SimplifyShapeProperties(CompositionShape obj)
         {
             // Remove the centerpoint if it's not used by Scale or Rotation.
-            var nonDefaultProperties = GetNonDefaultProperties(obj);
+            var nonDefaultProperties = GetNonDefaultShapeProperties(obj);
             if (obj.CenterPoint.HasValue &&
                 ((nonDefaultProperties & (PropertyId.RotationAngleInDegrees | PropertyId.Scale)) == PropertyId.None))
             {
@@ -550,6 +556,76 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     }
 
                     obj.TransformMatrix = combinedMatrix;
+                }
+            }
+        }
+
+        void SimplifySpriteShapeProperties(CompositionSpriteShape sprite)
+        {
+            SimplifyShapeProperties(sprite);
+
+            // Unset properties that are set to their default values.
+            if (sprite.StrokeStartCap.HasValue && sprite.StrokeStartCap.Value == CompositionStrokeCap.Flat)
+            {
+                sprite.StrokeStartCap = null;
+            }
+
+            if (sprite.StrokeDashCap.HasValue && sprite.StrokeDashCap.Value == CompositionStrokeCap.Flat)
+            {
+                sprite.StrokeDashCap = null;
+            }
+
+            if (sprite.StrokeEndCap.HasValue && sprite.StrokeEndCap.Value == CompositionStrokeCap.Flat)
+            {
+                sprite.StrokeEndCap = null;
+            }
+
+            var nonDefaultProperties = GetNonDefaultSpriteShapeProperties(sprite);
+
+            var nonDefaultGeometryProperties = GetNonDefaultGeometryProperties(sprite.Geometry);
+
+            var isTrimmed = (nonDefaultGeometryProperties & (PropertyId.TrimEnd | PropertyId.TrimStart)) != PropertyId.None;
+
+            if (sprite.Geometry.Type == CompositionObjectType.CompositionEllipseGeometry)
+            {
+                // Remove the StrokeMiterLimit and StrokeLineJoin properties. These properties
+                // only apply to changes of direction in a path, and never to an ellipse.
+                if ((nonDefaultProperties & PropertyId.StrokeMiterLimit) != PropertyId.None)
+                {
+                    sprite.StrokeMiterLimit = null;
+                    sprite.StopAnimation(nameof(sprite.StrokeMiterLimit));
+                    GraphHasChanged();
+                }
+
+                if ((nonDefaultProperties & PropertyId.StrokeLineJoin) != PropertyId.None)
+                {
+                    sprite.StrokeLineJoin = null;
+                    sprite.StopAnimation(nameof(sprite.StrokeLineJoin));
+                    GraphHasChanged();
+                }
+            }
+
+            if (sprite.Geometry.Type == CompositionObjectType.CompositionRectangleGeometry ||
+                sprite.Geometry.Type == CompositionObjectType.CompositionRoundedRectangleGeometry ||
+                sprite.Geometry.Type == CompositionObjectType.CompositionEllipseGeometry)
+            {
+                // TODO - this can also be enabled for path geometries that are closed paths.
+                // The geometry is closed. If it's not trimmed then the caps are irrelavent.
+                if (!isTrimmed)
+                {
+                    if ((nonDefaultProperties & PropertyId.StrokeStartCap) != PropertyId.None)
+                    {
+                        sprite.StrokeStartCap = null;
+                        sprite.StopAnimation(nameof(sprite.StrokeStartCap));
+                        GraphHasChanged();
+                    }
+
+                    if ((nonDefaultProperties & PropertyId.StrokeEndCap) != PropertyId.None)
+                    {
+                        sprite.StrokeEndCap = null;
+                        sprite.StopAnimation(nameof(sprite.StrokeEndCap));
+                        GraphHasChanged();
+                    }
                 }
             }
         }
@@ -621,7 +697,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             var elidableContainers = containerShapes.Where(n =>
             {
                 var container = n.container;
-                var containerProperties = GetNonDefaultProperties(container);
+                var containerProperties = GetNonDefaultShapeProperties(container);
 
                 if (container.Shapes.Count == 0)
                 {
@@ -637,7 +713,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
                 foreach (var child in container.Shapes)
                 {
-                    var childProperties = GetNonDefaultProperties(child);
+                    var childProperties = GetNonDefaultShapeProperties(child);
 
                     if (child.Animators.Where(a => a.AnimatedProperty == "TransformMatrix").Any())
                     {
@@ -674,7 +750,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             var containersWithNoPropertiesSet = containerShapes.Where(n =>
             {
                 var container = n.container;
-                var containerProperties = GetNonDefaultProperties(container);
+                var containerProperties = GetNonDefaultShapeProperties(container);
 
                 if (container.Animators.Count != 0 || containerProperties != PropertyId.None)
                 {
@@ -833,8 +909,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
                 var child = (CompositionContainerShape)container.Shapes[0];
 
-                var parentProperties = GetNonDefaultProperties(container);
-                var childProperties = GetNonDefaultProperties(child);
+                var parentProperties = GetNonDefaultShapeProperties(container);
+                var childProperties = GetNonDefaultShapeProperties(child);
 
                 if (parentProperties == PropertyId.TransformMatrix &&
                     (childProperties & PropertyId.TransformMatrix) == PropertyId.None)
@@ -961,7 +1037,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             {
                 var shapeVisual = (ShapeVisual)obj;
                 var parent = (ContainerVisual)node.Parent;
-                var parentProperties = GetNonDefaultProperties(parent);
+                var parentProperties = GetNonDefaultVisualProperties(parent);
 
                 if (parentProperties == PropertyId.None)
                 {
@@ -1188,8 +1264,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
                 var child = parent.Shapes[0];
 
-                var parentProperties = GetNonDefaultProperties(parent);
-                var childProperties = GetNonDefaultProperties(child);
+                var parentProperties = GetNonDefaultShapeProperties(parent);
+                var childProperties = GetNonDefaultShapeProperties(child);
 
                 if (parentProperties == PropertyId.Scale && IsScaleUsedForVisibility(parent))
                 {
@@ -1227,8 +1303,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
                 var child = (CompositionSpriteShape)parent.Shapes[0];
 
-                var parentProperties = GetNonDefaultProperties(parent);
-                var childProperties = GetNonDefaultProperties(child);
+                var parentProperties = GetNonDefaultShapeProperties(parent);
+                var childProperties = GetNonDefaultShapeProperties(child);
 
                 // Common case is that the child has no non-default properties.
                 // We could handle more cases but it's more complicated.
@@ -1296,7 +1372,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
                     // Find the ContainerVisuals that have no properties set.
                     n.Object.Type == CompositionObjectType.ContainerVisual &&
-                    GetNonDefaultProperties((ContainerVisual)n.Object) == PropertyId.None
+                    GetNonDefaultVisualProperties((ContainerVisual)n.Object) == PropertyId.None
             ).ToArray();
 
             // Pull the children of the container into the parent of the container. Remove the unnecessary containers.
@@ -1357,7 +1433,19 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             }
         }
 
-        static PropertyId GetNonDefaultProperties(CompositionShape obj)
+        static PropertyId GetNonDefaultCompositionObjectProperties(CompositionObject obj)
+        {
+            var result = PropertyId.None;
+
+            foreach (var animator in obj.Animators)
+            {
+                result |= PropertyIdFromName(animator.AnimatedProperty);
+            }
+
+            return result;
+        }
+
+        static PropertyId GetNonDefaultShapeProperties(CompositionShape obj)
         {
             var result = PropertyId.None;
             if (obj.CenterPoint.HasValue)
@@ -1395,15 +1483,64 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 result |= PropertyId.TransformMatrix;
             }
 
-            foreach (var animator in obj.Animators)
-            {
-                result |= PropertyIdFromName(animator.AnimatedProperty);
-            }
-
-            return result;
+            return result | GetNonDefaultCompositionObjectProperties((CompositionObject)obj);
         }
 
-        static PropertyId GetNonDefaultProperties(Visual obj)
+        static PropertyId GetNonDefaultGeometryProperties(CompositionGeometry obj)
+        {
+            var result = PropertyId.None;
+
+            if (obj.TrimStart.HasValue)
+            {
+                result |= PropertyId.TrimStart;
+            }
+
+            if (obj.TrimEnd.HasValue)
+            {
+                result |= PropertyId.TrimEnd;
+            }
+
+            if (obj.TrimOffset.HasValue)
+            {
+                result |= PropertyId.TrimOffset;
+            }
+
+            return result | GetNonDefaultCompositionObjectProperties((CompositionObject)obj);
+        }
+
+        static PropertyId GetNonDefaultSpriteShapeProperties(CompositionSpriteShape obj)
+        {
+            var result = PropertyId.None;
+
+            if (obj.StrokeDashCap.HasValue)
+            {
+                result |= PropertyId.StrokeDashCap;
+            }
+
+            if (obj.StrokeEndCap.HasValue)
+            {
+                result |= PropertyId.StrokeEndCap;
+            }
+
+            if (obj.StrokeLineJoin.HasValue)
+            {
+                result |= PropertyId.StrokeLineJoin;
+            }
+
+            if (obj.StrokeMiterLimit.HasValue)
+            {
+                result |= PropertyId.StrokeMiterLimit;
+            }
+
+            if (obj.StrokeStartCap.HasValue)
+            {
+                result |= PropertyId.StrokeStartCap;
+            }
+
+            return result | GetNonDefaultShapeProperties((CompositionShape)obj);
+        }
+
+        static PropertyId GetNonDefaultVisualProperties(Visual obj)
         {
             var result = PropertyId.None;
             if (obj.BorderMode.HasValue)
@@ -1471,7 +1608,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 result |= PropertyIdFromName(animator.AnimatedProperty);
             }
 
-            return result;
+            return result | GetNonDefaultCompositionObjectProperties((CompositionObject)obj);
         }
 
         // If a ContainerVisual has exactly one child that is a ContainerVisual, and each
@@ -1483,9 +1620,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             {
                 // Find the ContainerVisuals that have a single child that is a ContainerVisual.
                 return
-                    n.Object is ContainerVisual container &&
-                    container.Children.Count == 1 &&
-                    container.Children[0].Type == CompositionObjectType.ContainerVisual;
+                        n.Object is ContainerVisual container &&
+                        container.Children.Count == 1 &&
+                        container.Children[0].Type == CompositionObjectType.ContainerVisual;
             }).ToArray();
 
             foreach (var (_, obj) in containersWithASingleContainer)
@@ -1499,8 +1636,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
                 var child = (ContainerVisual)parent.Children[0];
 
-                var parentProperties = GetNonDefaultProperties(parent);
-                var childProperties = GetNonDefaultProperties(child);
+                var parentProperties = GetNonDefaultVisualProperties(parent);
+                var childProperties = GetNonDefaultVisualProperties(child);
 
                 // If the containers have non-overlapping properties they can be coalesced.
                 // If the child has PropertySet values, don't try to coalesce (although we could
@@ -1584,11 +1721,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             {
                 // Find the ContainerVisuals that have a single child that is a ContainerVisual.
                 return
-                    n.Object is ContainerVisual container &&
-                    n.Node.Parent is ContainerVisual &&
-                    container.Children.Count == 1 &&
-                    (container.Children[0].Type == CompositionObjectType.SpriteVisual ||
-                     container.Children[0].Type == CompositionObjectType.ShapeVisual);
+                        n.Object is ContainerVisual container &&
+                        n.Node.Parent is ContainerVisual &&
+                        container.Children.Count == 1 &&
+                        (container.Children[0].Type == CompositionObjectType.SpriteVisual ||
+                         container.Children[0].Type == CompositionObjectType.ShapeVisual);
             }).ToArray();
 
             foreach (var (node, obj) in containersWithASingleSprite)
@@ -1596,8 +1733,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                 var parent = (ContainerVisual)obj;
                 var child = (ContainerVisual)parent.Children[0];
 
-                var parentProperties = GetNonDefaultProperties(parent);
-                var childProperties = GetNonDefaultProperties(child);
+                var parentProperties = GetNonDefaultVisualProperties(parent);
+                var childProperties = GetNonDefaultVisualProperties(child);
 
                 // If the containers have non-overlapping properties they can be coalesced.
                 // If the parent has PropertySet values, don't try to coalesce (although we could
@@ -1776,34 +1913,31 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             RotationAxis = RotationAngleInDegrees << 1,
             Scale = RotationAxis << 1,
             Size = Scale << 1,
-            TransformMatrix = Size << 1,
-            TrimStart = TransformMatrix << 1,
-            TrimEnd = TrimStart << 1,
+            StrokeEndCap = Size << 1,
+            StrokeDashCap = StrokeEndCap << 1,
+            StrokeLineJoin = StrokeDashCap << 1,
+            StrokeMiterLimit = StrokeLineJoin << 1,
+            StrokeStartCap = StrokeMiterLimit << 1,
+            TransformMatrix = StrokeStartCap << 1,
+            TrimEnd = TransformMatrix << 1,
+            TrimOffset = TrimEnd << 1,
+            TrimStart = TrimOffset << 1,
         }
 
         static PropertyId PropertyIdFromName(string value)
-            => value switch
+        {
+            if (s_propertyIdFromNameMap == null)
             {
-                "BorderMode" => PropertyId.BorderMode,
-                "CenterPoint" => PropertyId.CenterPoint,
-                "Clip" => PropertyId.Clip,
-                "Color" => PropertyId.Color,
-                "Comment" => PropertyId.Comment,
-                "IsVisible" => PropertyId.IsVisible,
-                "Offset" => PropertyId.Offset,
-                "Opacity" => PropertyId.Opacity,
-                "Path" => PropertyId.Path,
-                "Position" => PropertyId.Position,
-                "Progress" => PropertyId.Progress,
-                "RotationAngleInDegrees" => PropertyId.RotationAngleInDegrees,
-                "RotationAxis" => PropertyId.RotationAxis,
-                "Scale" => PropertyId.Scale,
-                "Size" => PropertyId.Size,
-                "TransformMatrix" => PropertyId.TransformMatrix,
-                "TrimStart" => PropertyId.TrimStart,
-                "TrimEnd" => PropertyId.TrimEnd,
-                _ => PropertyId.Unknown,
-            };
+                s_propertyIdFromNameMap =
+                    Enum.GetValues(typeof(PropertyId)).Cast<PropertyId>()
+                        .Where(p => p != PropertyId.None)
+                        .ToDictionary(p => Enum.GetName(typeof(PropertyId), p));
+            }
+
+            return s_propertyIdFromNameMap.TryGetValue(value, out var result)
+                ? result
+                : PropertyId.None;
+        }
 
         void CopyDescriptions(IDescribable from, IDescribable to)
         {

@@ -2802,9 +2802,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                 }
             }
 
-            sprite.StrokeStartCap = sprite.StrokeEndCap = sprite.StrokeDashCap = StrokeCap(shapeStroke.CapType);
+            sprite.StrokeStartCap = sprite.StrokeEndCap = sprite.StrokeDashCap = StrokeCapDefaultIsFlat(shapeStroke.CapType);
 
-            sprite.StrokeLineJoin = StrokeLineJoin(shapeStroke.JoinType);
+            sprite.StrokeLineJoin = StrokeLineJoinDefaultIsMiter(shapeStroke.JoinType);
 
             // Lottie (and SVG/CSS) defines miter limit as (miter_length / stroke_thickness).
             // WUC defines miter limit as (miter_length / (2*stroke_thickness).
@@ -4487,12 +4487,12 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
         {
         }
 
-        static CompositionStrokeCap StrokeCap(ShapeStroke.LineCapType lineCapType)
+        static CompositionStrokeCap? StrokeCapDefaultIsFlat(ShapeStroke.LineCapType lineCapType)
         {
             switch (lineCapType)
             {
                 case ShapeStroke.LineCapType.Butt:
-                    return CompositionStrokeCap.Flat;
+                    return null;
                 case ShapeStroke.LineCapType.Round:
                     return CompositionStrokeCap.Round;
                 case ShapeStroke.LineCapType.Projected:
@@ -4502,14 +4502,14 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             }
         }
 
-        static CompositionStrokeLineJoin StrokeLineJoin(ShapeStroke.LineJoinType lineJoinType)
+        static CompositionStrokeLineJoin? StrokeLineJoinDefaultIsMiter(ShapeStroke.LineJoinType lineJoinType)
         {
             switch (lineJoinType)
             {
                 case ShapeStroke.LineJoinType.Bevel:
                     return CompositionStrokeLineJoin.Bevel;
                 case ShapeStroke.LineJoinType.Miter:
-                    return CompositionStrokeLineJoin.Miter;
+                    return null;
                 case ShapeStroke.LineJoinType.Round:
                 default:
                     return CompositionStrokeLineJoin.Round;

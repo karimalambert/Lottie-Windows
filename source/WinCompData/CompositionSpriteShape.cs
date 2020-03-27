@@ -24,17 +24,21 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData
 
         public CompositionBrush StrokeBrush { get; set; }
 
-        public CompositionStrokeCap StrokeDashCap { get; set; } = CompositionStrokeCap.Flat;
-
         public float StrokeDashOffset { get; set; }
 
         public List<float> StrokeDashArray { get; } = new List<float>();
 
-        public CompositionStrokeCap StrokeEndCap { get; set; } = CompositionStrokeCap.Flat;
+        // Default is CompositionStrokeCap.Flat.
+        public CompositionStrokeCap? StrokeDashCap { get; set; }
 
-        public CompositionStrokeLineJoin StrokeLineJoin { get; set; } = CompositionStrokeLineJoin.Miter;
+        // Default is CompositionStrokeCap.Flat.
+        public CompositionStrokeCap? StrokeStartCap { get; set; }
 
-        public CompositionStrokeCap StrokeStartCap { get; set; } = CompositionStrokeCap.Flat;
+        // Default is CompositionStrokeCap.Flat.
+        public CompositionStrokeCap? StrokeEndCap { get; set; }
+
+        // Default is CompositionStrokeLineJoin.Miter.
+        public CompositionStrokeLineJoin? StrokeLineJoin { get; set; }
 
         // Default is 1.
         public float? StrokeMiterLimit { get; set; }

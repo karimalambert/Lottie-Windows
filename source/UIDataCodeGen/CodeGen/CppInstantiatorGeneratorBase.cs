@@ -942,7 +942,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             else
             {
                 builder.WriteLine($"{Wuc}::{_typeName.Compositor} compositor,");
-                builder.WriteLine($"{_typeName.Object}* diagnostics);");
+                builder.WriteLine($"Platform::{_typeName.Object}* diagnostics);");
             }
 
             builder.UnIndent();

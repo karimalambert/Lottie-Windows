@@ -260,19 +260,19 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie
             where T : Wc.CompositionGeometry
         {
             CacheAndInitializeCompositionObject(source, target);
-            if (source.TrimStart != 0)
+            if (source.TrimStart.HasValue)
             {
-                target.TrimStart = source.TrimStart;
+                target.TrimStart = source.TrimStart.Value;
             }
 
-            if (source.TrimEnd != 1)
+            if (source.TrimEnd.HasValue)
             {
-                target.TrimEnd = source.TrimEnd;
+                target.TrimEnd = source.TrimEnd.Value;
             }
 
-            if (source.TrimOffset != 0)
+            if (source.TrimOffset.HasValue)
             {
-                target.TrimOffset = source.TrimOffset;
+                target.TrimOffset = source.TrimOffset.Value;
             }
 
             return target;
@@ -1106,19 +1106,20 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie
             if (obj.StrokeBrush != null)
             {
                 result.StrokeBrush = GetCompositionBrush(obj.StrokeBrush);
-                if (obj.StrokeDashCap != Wd.CompositionStrokeCap.Flat)
+
+                if (obj.StrokeDashCap.HasValue)
                 {
-                    result.StrokeDashCap = StrokeCap(obj.StrokeDashCap);
+                    result.StrokeDashCap = StrokeCap(obj.StrokeDashCap.Value);
                 }
 
-                if (obj.StrokeStartCap != Wd.CompositionStrokeCap.Flat)
+                if (obj.StrokeStartCap.HasValue)
                 {
-                    result.StrokeStartCap = StrokeCap(obj.StrokeStartCap);
+                    result.StrokeStartCap = StrokeCap(obj.StrokeStartCap.Value);
                 }
 
-                if (obj.StrokeEndCap != Wd.CompositionStrokeCap.Flat)
+                if (obj.StrokeEndCap.HasValue)
                 {
-                    result.StrokeEndCap = StrokeCap(obj.StrokeEndCap);
+                    result.StrokeEndCap = StrokeCap(obj.StrokeEndCap.Value);
                 }
 
                 if (obj.StrokeThickness.HasValue)
@@ -1131,9 +1132,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie
                     result.StrokeMiterLimit = obj.StrokeMiterLimit.Value;
                 }
 
-                if (obj.StrokeLineJoin != Wd.CompositionStrokeLineJoin.Miter)
+                if (obj.StrokeLineJoin.HasValue)
                 {
-                    result.StrokeLineJoin = StrokeLineJoin(obj.StrokeLineJoin);
+                    result.StrokeLineJoin = StrokeLineJoin(obj.StrokeLineJoin.Value);
                 }
 
                 if (obj.StrokeDashOffset != 0)
