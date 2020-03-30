@@ -235,14 +235,26 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.OpenScope();
 
             // Add any internal constants.
-            if (info.InternalConstants.Count > 0)
+            foreach (var c in info.InternalConstants)
             {
-                builder.WriteComment("Constants.");
-                foreach (var c in info.InternalConstants)
+                builder.WriteComment(c.Description);
+                switch (c.Type)
                 {
-                    builder.WriteLine($"internal const float {c.name} = {_s.Float(c.value)};");
-                    builder.WriteLine();
+                    case ConstantType.Color:
+                        var color = (WinCompData.Wui.Color)c.Value;
+                        builder.WriteLine($"internal static readonly Color {c.Name} = {_s.Color(color)};");
+                        break;
+                    case ConstantType.Int64:
+                        builder.WriteLine($"internal const long {c.Name} = {_s.Int64((long)c.Value)};");
+                        break;
+                    case ConstantType.Float:
+                        builder.WriteLine($"internal const float {c.Name} = {_s.Float((float)c.Value)};");
+                        break;
+                    default:
+                        throw new InvalidOperationException();
                 }
+
+                builder.WriteLine();
             }
 
             // Add the methods and fields needed for theming.
@@ -288,7 +300,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     {
                         var defaultValue = GetDefaultPropertyBindingValue(prop);
 
-                        WriteInitializedField(builder, ExposedType(prop), $"_theme{prop.Name}", _s.VariableInitialization(defaultValue));
+                        WriteInitializedField(builder, ExposedType(prop), $"_theme{prop.Name}", _s.VariableInitialization($"c_theme{prop.Name}"));
                     }
                 }
 

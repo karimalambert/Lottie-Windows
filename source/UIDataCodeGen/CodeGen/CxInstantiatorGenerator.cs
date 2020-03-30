@@ -65,9 +65,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 else
                 {
                     var exposedTypeName = QualifiedTypeName(prop.ExposedType);
-                    var initialValue = GetDefaultPropertyBindingValue(prop);
 
-                    WriteInitializedField(builder, exposedTypeName, $"_theme{prop.Name}", S.VariableInitialization(initialValue));
+                    WriteInitializedField(builder, exposedTypeName, $"_theme{prop.Name}", S.VariableInitialization($"c_theme{prop.Name}"));
                 }
             }
 
@@ -161,7 +160,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     builder.WriteLine($"{S.String(prop.Name)},");
                     builder.WriteLine($"{TypeName(prop.ExposedType)}::typeid,");
                     builder.WriteLine($"{S.Namespace(SourceInfo.Namespace)}::{SourceClassName}::typeid,");
-                    builder.WriteLine($"ref new PropertyMetadata({GetDefaultPropertyBindingValue(prop)},");
+                    builder.WriteLine($"ref new PropertyMetadata(c_theme{prop.Name},");
                     builder.WriteLine($"ref new PropertyChangedCallback(&{S.Namespace(SourceInfo.Namespace)}::{SourceClassName}::On{prop.Name}Changed)));");
                     builder.UnIndent();
                     builder.UnIndent();
@@ -207,18 +206,5 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 builder.WriteLine();
             }
         }
-
-        string GetDefaultPropertyBindingValue(PropertyBinding prop)
-             => prop.ExposedType switch
-             {
-                 PropertySetValueType.Color => $"Windows::UI::ColorHelper::FromArgb({S.ColorArgs((WinCompData.Wui.Color)prop.DefaultValue)})",
-
-                 // Scalars are stored as floats, but exposed as doubles as XAML markup prefers doubles.
-                 PropertySetValueType.Scalar => S.Double((float)prop.DefaultValue),
-                 PropertySetValueType.Vector2 => S.Vector2((Vector2)prop.DefaultValue),
-                 PropertySetValueType.Vector3 => S.Vector3((Vector3)prop.DefaultValue),
-                 PropertySetValueType.Vector4 => S.Vector4((Vector4)prop.DefaultValue),
-                 _ => throw new InvalidOperationException(),
-             };
     }
 }

@@ -4,14 +4,15 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 
 namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
 {
     sealed class ThemePropertiesMonospaceTableFormatter : MonospaceTableFormatter
     {
-        internal static IEnumerable<string> GetThemePropertyDescriptionLines(IEnumerable<PropertyBinding> names)
+        internal static IEnumerable<string> GetThemePropertyDescriptionLines(IEnumerable<PropertyBinding> themeProperty)
         {
-            if (names is null)
+            if (themeProperty is null)
             {
                 return Array.Empty<string>();
             }
@@ -21,21 +22,45 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen.Tables
                 new Row.ColumnData(
                         ColumnData.Create("Theme property"),
                         ColumnData.Create("Type"),
-                        ColumnData.Create("Exposed as")),
+                        ColumnData.Create("Default value")
+                        ),
                 Row.HeaderBottom,
                 };
 
             var records =
-                (from name in names
+                (from property in themeProperty
                  select new Row.ColumnData(
-                     ColumnData.Create(name.Name, TextAlignment.Left, 1),
-                     ColumnData.Create(name.ExposedType.ToString()),
-                     ColumnData.Create(name.ActualType.ToString())
+                     ColumnData.Create(property.Name, TextAlignment.Left, 1),
+                     ColumnData.Create(property.ExposedType.ToString()),
+                     ColumnData.Create(GetDefaultValueString(property))
                  )).ToArray();
 
             var rows = header.Concat(records).Append(Row.BodyBottom);
 
             return GetTableLines(rows);
+        }
+
+        static string GetDefaultValueString(PropertyBinding propertyBinding)
+        {
+            switch (propertyBinding.ExposedType)
+            {
+                case WinCompData.MetaData.PropertySetValueType.Color:
+                    var color = (WinCompData.Wui.Color)propertyBinding.DefaultValue;
+                    var colorHex = $"#{color.Hex}";
+                    return color.TryGetFriendlyName(out var colorName)
+                        ? $"{colorHex} {colorName}"
+                        : colorHex;
+                case WinCompData.MetaData.PropertySetValueType.Scalar:
+                    return ((float)propertyBinding.DefaultValue).ToString();
+                case WinCompData.MetaData.PropertySetValueType.Vector2:
+                    return ((Vector2)propertyBinding.DefaultValue).ToString();
+                case WinCompData.MetaData.PropertySetValueType.Vector3:
+                    return ((Vector3)propertyBinding.DefaultValue).ToString();
+                case WinCompData.MetaData.PropertySetValueType.Vector4:
+                    return ((Vector4)propertyBinding.DefaultValue).ToString();
+                default:
+                    throw new InvalidOperationException();
+            }
         }
     }
 }

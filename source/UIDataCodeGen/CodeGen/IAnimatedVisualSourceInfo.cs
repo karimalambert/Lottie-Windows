@@ -107,7 +107,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         /// in the assembly in which the codegen output is used, but are not
         /// part of a public interface.
         /// </summary>
-        IReadOnlyList<(string name, float value)> InternalConstants { get; }
+        IReadOnlyList<NamedConstant> InternalConstants { get; }
 
         /// <summary>
         /// Accesses metadata associated with the source of the composition. This may contain

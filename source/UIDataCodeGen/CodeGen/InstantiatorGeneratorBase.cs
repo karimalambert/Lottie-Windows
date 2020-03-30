@@ -1,5 +1,6 @@
-// Copyright(c) Microsoft Corporation.All rights reserved.
-// Licensed under the MIT License.
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
 
 using System;
 using System.Collections.Generic;
@@ -54,7 +55,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         readonly IReadOnlyList<string> _toolInfo;
         readonly string _interfaceType;
         readonly IReadOnlyList<(Marker marker, string startConstant, string endConstant)> _lottieMarkers;
-        readonly IReadOnlyList<(string name, float value)> _publicConstants;
+        readonly IReadOnlyList<NamedConstant> _internalConstants;
 
         AnimatedVisualGenerator _currentAnimatedVisualGenerator;
 
@@ -75,7 +76,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             _toolInfo = configuration.ToolInfo;
             _interfaceType = configuration.InterfaceType;
             _lottieMarkers = GetMarkers(_sourceMetadata.LottieMetadata).ToArray();
-            _publicConstants = GetInternalConstants().ToArray();
+            _internalConstants = GetInternalConstants().ToArray();
 
             var graphs = configuration.ObjectGraphs;
 
@@ -386,16 +387,42 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 select (m, startConstant, endConstant);
         }
 
-        IEnumerable<(string name, float value)> GetInternalConstants()
+        IEnumerable<NamedConstant> GetInternalConstants()
         {
+            // Get the markers.
             foreach (var (marker, startConstant, endConstant) in _lottieMarkers)
             {
-                yield return (startConstant, (float)marker.Frame.Progress);
+                yield return new NamedConstant(startConstant, $"Marker: {marker.Name}.", ConstantType.Float, (float)marker.Frame.Progress);
                 if (marker.Duration.Frames > 0)
                 {
-                    yield return (endConstant, (float)(marker.Frame + marker.Duration).Progress);
+                    yield return new NamedConstant(endConstant, $"Marker: {marker.Name}.", ConstantType.Float, (float)(marker.Frame + marker.Duration).Progress);
                 }
             }
+
+            // Get the theme properties.
+            foreach (var themeProperty in _sourceMetadata.PropertyBindings)
+            {
+                switch (themeProperty.ExposedType)
+                {
+                    case PropertySetValueType.Color:
+                        yield return new NamedConstant($"c_theme{themeProperty.Name}", $"Theme property: {themeProperty.Name}.", ConstantType.Color, (Wui.Color)themeProperty.DefaultValue);
+                        break;
+                    case PropertySetValueType.Scalar:
+                    case PropertySetValueType.Vector2:
+                    case PropertySetValueType.Vector3:
+                    case PropertySetValueType.Vector4:
+                    default:
+                        // For now we only support some of the possible property types as constants.
+                        continue;
+                }
+            }
+
+            // Get the duration in ticks.
+            yield return new NamedConstant(
+                "c_durationTicks",
+                $"Animation duration: {_compositionDuration.Ticks / (double)System.TimeSpan.TicksPerSecond,-1:N3} seconds.",
+                ConstantType.Int64,
+                _compositionDuration.Ticks);
         }
 
         // Returns a name that can be used as the name of a class constant.
@@ -443,7 +470,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             // But only do this if we're NOT generating a DependencyObject because
             // the property bindings available on a DependencyObject are obvious
             // from the code and repeating them here would just be noise.
-            if (!_generateDependencyObject && _sourceMetadata.PropertyBindings?.Count > 0)
+            if (!_generateDependencyObject && _sourceMetadata.PropertyBindings.Count > 0)
             {
                 foreach (var line in ThemePropertiesMonospaceTableFormatter.GetThemePropertyDescriptionLines(_sourceMetadata.PropertyBindings))
                 {
@@ -711,7 +738,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         bool IAnimatedVisualSourceInfo.UsesCompositeEffect => _animatedVisualGenerators.Any(f => f.UsesCompositeEffect);
 
-        IReadOnlyList<(string name, float value)> IAnimatedVisualSourceInfo.InternalConstants => _publicConstants;
+        IReadOnlyList<NamedConstant> IAnimatedVisualSourceInfo.InternalConstants => _internalConstants;
 
         IReadOnlyList<LoadedImageSurfaceInfo> IAnimatedVisualSourceInfo.LoadedImageSurfaces => _loadedImageSurfaceInfos;
 
@@ -1514,7 +1541,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 _owner.WriteAnimatedVisualStart(builder, this);
 
                 // Write fields for constant values.
-                builder.WriteComment($"Animation duration: {_owner._compositionDuration.Ticks / (double)System.TimeSpan.TicksPerSecond,-1:N3} seconds.");
                 builder.WriteLine(ConstExprField(_s.TypeInt64, DurationTicksFieldName, $"{_s.Int64(_owner._compositionDuration.Ticks)}"));
 
                 // Write fields for each object that needs storage (i.e. objects that are referenced more than once).

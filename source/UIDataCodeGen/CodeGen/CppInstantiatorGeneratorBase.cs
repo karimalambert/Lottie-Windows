@@ -885,15 +885,25 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.Indent();
 
             // Add any internal constants.
-            if (SourceInfo.InternalConstants.Count > 0)
+            foreach (var c in SourceInfo.InternalConstants)
             {
-                builder.WriteComment("Constants.");
-
-                foreach (var c in SourceInfo.InternalConstants)
+                builder.WriteComment(c.Description);
+                switch (c.Type)
                 {
-                    builder.WriteLine($"static constexpr float {c.name}{{ {S.Float(c.value)} }};");
-                    builder.WriteLine();
+                    case ConstantType.Color:
+                        builder.WriteLine($"static inline const Windows::UI::Color {c.Name}{S.Color((WinCompData.Wui.Color)c.Value)};");
+                        break;
+                    case ConstantType.Int64:
+                        builder.WriteLine($"static constexpr int64_t {c.Name}{{ {S.Int64((long)c.Value)} }};");
+                        break;
+                    case ConstantType.Float:
+                        builder.WriteLine($"static constexpr float {c.Name}{{ {S.Float((float)c.Value)} }};");
+                        break;
+                    default:
+                        throw new InvalidOperationException();
                 }
+
+                builder.WriteLine();
             }
 
             if (SourceInfo.IsThemed)
