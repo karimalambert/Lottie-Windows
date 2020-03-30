@@ -75,7 +75,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             _toolInfo = configuration.ToolInfo;
             _interfaceType = configuration.InterfaceType;
             _lottieMarkers = GetMarkers(_sourceMetadata.LottieMetadata).ToArray();
-            _publicConstants = GetPublicConstants().ToArray();
+            _publicConstants = GetInternalConstants().ToArray();
 
             var graphs = configuration.ObjectGraphs;
 
@@ -386,7 +386,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 select (m, startConstant, endConstant);
         }
 
-        IEnumerable<(string name, float value)> GetPublicConstants()
+        IEnumerable<(string name, float value)> GetInternalConstants()
         {
             foreach (var (marker, startConstant, endConstant) in _lottieMarkers)
             {
@@ -951,70 +951,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     ? _s.Vector4(value)
                     : throw new InvalidOperationException();
 
-        static Vector2? Vector2OrNullIfZero(double x, double y)
-            => x == 0 && y == 0
-                ? (Vector2?)null
-                : new Vector2((float)x, (float)y);
-
-        static Vector2? Vector2OrNullIfOne(double x, double y)
-            => x == 1 && y == 1
-                ? (Vector2?)null
-                : new Vector2((float)x, (float)y);
-
-        static double DegreesToRadians(double radians) => radians * 180 / Math.PI;
-
-        static void DecomposeMatrix(
-            Matrix3x2 matrix,
-            out Vector2? translation,
-            out double? rotationDegrees,
-            out Vector2? scale,
-            out Vector2? skew)
-        {
-            var a = matrix.M11;
-            var b = matrix.M12;
-            var c = matrix.M21;
-            var d = matrix.M22;
-
-            translation = Vector2OrNullIfZero(matrix.M31, matrix.M32);
-
-            var delta = (a * d) - (b * c);
-
-            if (a != 0 || b != 0)
-            {
-                var r = Math.Sqrt((a * a) + (b * b));
-                rotationDegrees = DegreesToRadians(b > 0 ? Math.Acos(a / r) : -Math.Acos(a / r));
-                scale = Vector2OrNullIfOne(r, delta / r);
-                skew = Vector2OrNullIfZero(Math.Atan(((a * c) + (b * d)) / (r * r)), 0);
-            }
-            else if (c != 0 || d != 0)
-            {
-                var s = Math.Sqrt((c * c) + (d * d));
-                rotationDegrees = DegreesToRadians((Math.PI / 2) - (d > 0 ? Math.Acos(-c / s) : -Math.Acos(c / s)));
-                scale = Vector2OrNullIfOne(delta / s, s);
-                skew = Vector2OrNullIfZero(0, Math.Atan(((a * c) + (b * d)) / (s * s)));
-            }
-            else
-            {
-                rotationDegrees = null;
-                scale = null;
-                skew = null;
-            }
-
-            if (rotationDegrees.HasValue)
-            {
-                if (double.IsNaN(rotationDegrees.Value))
-                {
-                    // The rotation value had an error (probably divide by zero). Ignore it.
-                    rotationDegrees = null;
-                }
-                else if (rotationDegrees.Value == 0)
-                {
-                    // 0 rotation is not interesting. Ignore it.
-                    rotationDegrees = null;
-                }
-            }
-        }
-
         /// <summary>
         /// Generates an IAnimatedVisual implementation.
         /// </summary>
@@ -1512,6 +1448,15 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 {
                     WriteMatrixComment(builder, value.Value);
                     WriteSetPropertyStatement(builder, propertyName, value, formatter: Matrix3x2, target);
+                }
+            }
+
+            void WriteSetPropertyStatement(CodeBuilder builder, string propertyName, Matrix4x4? value, string target = "result")
+            {
+                if (value.HasValue)
+                {
+                    WriteMatrixComment(builder, value.Value);
+                    WriteSetPropertyStatement(builder, propertyName, value, formatter: Matrix4x4, target);
                 }
             }
 
@@ -2131,7 +2076,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     b.WriteLine();
                 }
 
-                WriteMatrixComment(builder, obj.TransformMatrix.Value);
                 builder.WriteLine($"{ConstVar} result = CreateSpriteShape({CallFactoryFromFor(node, obj.Geometry)}, {Matrix3x2(obj.TransformMatrix.Value)});");
             }
 
@@ -2150,7 +2094,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     b.WriteLine();
                 }
 
-                WriteMatrixComment(builder, obj.TransformMatrix.Value);
                 builder.WriteLine($"{ConstVar} result = CreateSpriteShape({CallFactoryFromFor(node, obj.Geometry)}, {Matrix3x2(obj.TransformMatrix.Value)}, {CallFactoryFromFor(node, obj.FillBrush)});");
             }
 
@@ -2315,7 +2258,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 WriteSetPropertyStatement(builder, nameof(obj.RotationAxis), obj.RotationAxis);
                 WriteSetPropertyStatement(builder, nameof(obj.Scale), obj.Scale);
                 WriteSetPropertyStatement(builder, nameof(obj.Size), obj.Size);
-                WriteSetPropertyStatement(builder, nameof(obj.TransformMatrix), obj.TransformMatrix, Matrix4x4);
+                WriteSetPropertyStatement(builder, nameof(obj.TransformMatrix), obj.TransformMatrix);
             }
 
             void InitializeCompositionClip(CodeBuilder builder, CompositionClip obj, ObjectData node)
@@ -3104,17 +3047,30 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             uint IAnimatedVisualInfo.RequiredUapVersion => _requiredUapVersion;
 
-            void WriteMatrixComment(CodeBuilder builder, Matrix3x2 matrix)
+            static void WriteMatrixComment(CodeBuilder builder, Matrix3x2 matrix)
             {
-                DecomposeMatrix(matrix, out var translation, out var rotationDegrees, out var scale, out var skew);
+                var (translation, rotationDegrees, scale, skew) = MatrixDecomposer.Decompose(matrix);
 
                 // Use the word "Offset" to be consistent with Composition APIs.
                 var t = translation.HasValue ? $"Offset:{translation}" : string.Empty;
+                var r = rotationDegrees.HasValue ? $"Rotation:{rotationDegrees} degrees" : string.Empty;
                 var sc = scale.HasValue ? $"Scale:{scale}" : string.Empty;
                 var sk = skew.HasValue ? $"Skew:{skew}" : string.Empty;
-                var r = rotationDegrees.HasValue ? $"Rotation:{rotationDegrees} degrees" : string.Empty;
 
-                builder.WriteComment(string.Join(", ", new[] { t, sc, sk, r }.Where(str => str.Length > 0)));
+                builder.WriteComment(string.Join(", ", new[] { t, r, sc, sk }.Where(str => str.Length > 0)));
+            }
+
+            static void WriteMatrixComment(CodeBuilder builder, Matrix4x4 matrix)
+            {
+                var (translation, rotation, scale) = MatrixDecomposer.Decompose(matrix);
+
+                // Use the word "Offset" to be consistent with Composition APIs.
+                // Show only the x and y offsets and scales because we don't suport 3D Lottie.
+                var t = translation.HasValue ? $"Offset:<{translation.Value.X}, {translation.Value.Y}>" : string.Empty;
+                var r = rotation.HasValue ? $"Rotation:{rotation}" : string.Empty;
+                var sc = scale.HasValue ? $"Scale:<{scale.Value.X}, {scale.Value.Y}>" : string.Empty;
+
+                builder.WriteComment(string.Join(", ", new[] { t, r, sc }.Where(str => str.Length > 0)));
             }
         }
 

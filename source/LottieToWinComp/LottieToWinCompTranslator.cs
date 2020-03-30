@@ -1001,7 +1001,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
 
                 if (_addDescriptions)
                 {
-                    Describe(visibilityNode, $"Visibility for layer: {context.Layer.Name}");
+                    Describe(visibilityNode, $"Layer: {context.Layer.Name}");
                 }
 
                 // Animate between Scale(0,0) and Scale(1,1).

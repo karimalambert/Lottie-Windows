@@ -884,7 +884,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             WriteInternalAccessibility(builder);
             builder.Indent();
 
-            // Add any public constants.
+            // Add any internal constants.
             if (SourceInfo.InternalConstants.Count > 0)
             {
                 builder.WriteComment("Constants.");

@@ -103,7 +103,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         IReadOnlyList<LoadedImageSurfaceInfo> LoadedImageSurfaces { get; }
 
         /// <summary>
-        /// Public constants.
+        /// Internal constants. These are constants that are expected to be useful
+        /// in the assembly in which the codegen output is used, but are not
+        /// part of a public interface.
         /// </summary>
         IReadOnlyList<(string name, float value)> InternalConstants { get; }
 
