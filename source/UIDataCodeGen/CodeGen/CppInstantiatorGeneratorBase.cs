@@ -41,9 +41,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             _headerFileName = headerFileName;
             _typeName = new TypeNames(stringifier, isCppwinrtMode);
             SourceClassName = AnimatedVisualSourceInfo.ClassName;
-            AnimatedVisualTypeName = AnimatedVisualSourceInfo.Interface == null
-                ? "Microsoft::UI::Xaml::Controls::IAnimatedVisual"
-                : S.Namespace(AnimatedVisualSourceInfo.Interface);
+            var iface = AnimatedVisualSourceInfo.Interface;
+            AnimatedVisualTypeName = $"{iface.GetNamespace(S)}::{iface.UnqualifiedName}";
         }
 
         protected IAnimatedVisualSourceInfo SourceInfo => AnimatedVisualSourceInfo;
@@ -73,15 +72,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             // If a non-standard interface has been specified, include a header file for it.
             if (SourceInfo.Interface != null)
             {
-                // Remove any namespace qualifiers from the name in order
-                // to create a file name.
-                var fileName = SourceInfo.Interface;
-                var lastQualifierIndex = fileName.LastIndexOfAny(new[] { '.', ':' });
-                if (lastQualifierIndex >= 0)
-                {
-                    fileName = fileName.Substring(lastQualifierIndex + 1);
-                }
-
+                var fileName = SourceInfo.Interface.UnqualifiedName;
                 builder.WriteLine($"#include \"{fileName}.h\"");
             }
 
@@ -217,19 +208,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.WriteLine("{");
             builder.Indent();
 
-            if (SourceInfo.IsThemed)
-            {
-                if (SourceInfo.SourceMetadata.PropertyBindings.Any(pb => pb.ExposedType == PropertySetValueType.Color))
-                {
-                    // There's at least one themed color. It will need a helper method to convert to Vector4.
-                    builder.WriteLine("float4 ColorAsVector4(Color color)");
-                    builder.OpenScope();
-                    builder.WriteLine("return { static_cast<float>(color.R), static_cast<float>(color.G), static_cast<float>(color.B), static_cast<float>(color.A) };");
-                    builder.CloseScope();
-                    builder.WriteLine();
-                }
-            }
-
             if (SourceInfo.UsesCanvasEffects ||
                 SourceInfo.UsesCanvasGeometry)
             {
@@ -246,37 +224,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 // Write the composite effect class that will allow the use
                 // of this effect without win2d.
                 builder.WriteLine($"{CompositionEffectClass}");
-            }
-        }
-
-        /// <inheritdoc/>
-        protected override void WriteAnimatedVisualStart(
-            CodeBuilder builder,
-            IAnimatedVisualInfo info)
-        {
-            // Start writing the instantiator.
-            if (_isCppWinrtMode)
-            {
-                builder.WriteLine($"class {info.ClassName}");
-                builder.Indent();
-                builder.WriteLine($": public winrt::implements<{info.ClassName}, winrt::IAnimatedVisual, winrt::IClosable>");
-                builder.UnIndent();
-            }
-            else
-            {
-                builder.WriteLine($"ref class {info.ClassName} sealed");
-                builder.Indent();
-                builder.WriteLine($": public {AnimatedVisualTypeName}");
-                builder.UnIndent();
-            }
-
-            builder.OpenScope();
-
-            if (info.AnimatedVisualSourceInfo.UsesCanvasEffects ||
-                info.AnimatedVisualSourceInfo.UsesCanvasGeometry)
-            {
-                // D2D factory field.
-                builder.WriteLine("ComPtr<ID2D1Factory> _d2dFactory;");
             }
         }
 
@@ -839,24 +786,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         void WriteHeaderNamespaceStart(CodeBuilder builder, string inherits)
         {
-            if (SourceInfo.IsThemed)
-            {
-                // TODO - disabling for now while we figure out how to turn this on and off.
-                //builder.WriteLine("#include \"IThemedAnimatedVisualSource.h\"");
-            }
-
             builder.WriteLine();
             builder.WriteLine($"namespace {_s.Namespace(SourceInfo.Namespace)}");
             builder.OpenScope();
 
             WriteSourceDescriptionComments(builder);
-
-            if (SourceInfo.IsThemed)
-            {
-                // Make the AnimatedVisualSource inherit from IThemedAnimatedVisualSource.
-                // TODO - disabling for now while we figure out how to turn this on and off.
-                //inherits += ", IThemedAnimatedVisualSource";
-            }
 
             if (_isCppWinrtMode)
             {
@@ -867,7 +801,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             }
             else
             {
-                builder.WriteLine($"public ref class {SourceClassName} sealed");
+                builder.WriteLine($"ref class {SourceClassName} sealed");
                 builder.Indent();
                 builder.WriteLine($": public {inherits}");
                 builder.UnIndent();
@@ -910,7 +844,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             {
                 // Write properties declarations for each themed property.
                 builder.WriteComment("Theme properties.");
-                WritePrivatePublicThemeHeader(builder);
+                WriteInternalThemeHeader(builder);
             }
 
             builder.UnIndent();
@@ -922,7 +856,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         protected abstract void WritePrivateThemeHeader(CodeBuilder builder);
 
-        protected abstract void WritePrivatePublicThemeHeader(CodeBuilder builder);
+        protected abstract void WriteInternalThemeHeader(CodeBuilder builder);
 
         void WriteIAnimatedVisualSourceHeaderText(CodeBuilder builder)
         {
@@ -953,6 +887,21 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             {
                 builder.WriteLine($"{Wuc}::{_typeName.Compositor} compositor,");
                 builder.WriteLine($"Platform::{_typeName.Object}* diagnostics);");
+            }
+
+            if (SourceInfo.IsThemed)
+            {
+                var optionalVirtual = SourceInfo.Interface == null ? string.Empty : "virtual ";
+                if (_isCppWinrtMode)
+                {
+                    builder.WriteLine($"{optionalVirtual}winrt::{Wuc}::{T.CompositionPropertySet} GetThemeProperties(winrt::{Wuc}::{T.Compositor} compositor);");
+                }
+                else
+                {
+                    builder.WriteLine($"{optionalVirtual}{Wuc}::{T.CompositionPropertySet} GetThemeProperties({Wuc}::{T.Compositor} compositor);");
+                }
+
+                builder.WriteLine();
             }
 
             builder.UnIndent();

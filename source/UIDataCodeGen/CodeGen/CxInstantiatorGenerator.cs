@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData;
 using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData.MetaData;
@@ -79,11 +80,15 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.WriteLine("internal:");
         }
 
-        protected override void WritePrivatePublicThemeHeader(CodeBuilder builder)
+        protected override void WriteInternalThemeHeader(CodeBuilder builder)
         {
+            bool hasColorProperty = false;
+
             // Write properties declarations for each themed property.
             foreach (var prop in SourceInfo.SourceMetadata.PropertyBindings)
             {
+                hasColorProperty |= prop.ExposedType == PropertySetValueType.Color;
+
                 if (SourceInfo.GenerateDependencyObject)
                 {
                     builder.WriteLine($"static Windows::UI::Xaml::DependencyProperty^ {prop.Name}Property();");
@@ -98,20 +103,38 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 builder.WriteLine();
             }
 
-            builder.WriteLine($"{(SourceInfo.Interface == null ? string.Empty : "virtual ")}{Wuc}::{T.CompositionPropertySet} GetThemeProperties({Wuc}::{T.Compositor} compositor);");
+            if (hasColorProperty)
+            {
+                builder.WriteLine("static Windows::Foundation::Numerics::float4 ColorAsVector4(Windows::UI::Color color);");
+            }
+
             builder.WriteLine();
         }
 
         protected override void WriteThemePropertyImpls(CodeBuilder builder)
         {
-            builder.WriteLine($"{T.CompositionPropertySet} {S.Namespace(SourceInfo.Namespace)}::{SourceClassName}::EnsureThemeProperties({T.Compositor} compositor)");
+            var propertyBindings = SourceInfo.SourceMetadata.PropertyBindings;
+
+            var sourceClassQualifier = $"{S.Namespace(SourceInfo.Namespace)}::{SourceClassName}::";
+
+            if (propertyBindings.Any(pb => pb.ExposedType == PropertySetValueType.Color))
+            {
+                // Write the helper for converting a color to a vector 4.
+                builder.WriteLine($"float4 {sourceClassQualifier}ColorAsVector4(Color color)");
+                builder.OpenScope();
+                builder.WriteLine("return { static_cast<float>(color.R), static_cast<float>(color.G), static_cast<float>(color.B), static_cast<float>(color.A) };");
+                builder.CloseScope();
+                builder.WriteLine();
+            }
+
+            builder.WriteLine($"{T.CompositionPropertySet} {sourceClassQualifier}EnsureThemeProperties({T.Compositor} compositor)");
             builder.OpenScope();
             builder.WriteLine($"if ({SourceInfo.ThemePropertiesFieldName} == nullptr)");
             builder.OpenScope();
             builder.WriteLine($"{SourceInfo.ThemePropertiesFieldName} = compositor{S.Deref}CreatePropertySet();");
 
             // Initialize the values in the property set.
-            foreach (var prop in SourceInfo.SourceMetadata.PropertyBindings)
+            foreach (var prop in propertyBindings)
             {
                 WriteThemePropertyInitialization(builder, SourceInfo.ThemePropertiesFieldName, prop, prop.Name);
             }
@@ -122,28 +145,28 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.CloseScope();
             builder.WriteLine();
 
-            builder.WriteLine($"{T.CompositionPropertySet} {S.Namespace(SourceInfo.Namespace)}::{SourceClassName}::GetThemeProperties({T.Compositor} compositor)");
+            builder.WriteLine($"{T.CompositionPropertySet} {sourceClassQualifier}GetThemeProperties({T.Compositor} compositor)");
             builder.OpenScope();
             builder.WriteLine("return EnsureThemeProperties(compositor);");
             builder.CloseScope();
             builder.WriteLine();
 
             // Write property implementations for each theme property.
-            foreach (var prop in SourceInfo.SourceMetadata.PropertyBindings)
+            foreach (var prop in propertyBindings)
             {
                 if (SourceInfo.GenerateDependencyObject)
                 {
                     // Write the dependency property accessor.
-                    builder.WriteLine($"DependencyProperty^ {S.Namespace(SourceInfo.Namespace)}::{SourceClassName}::{prop.Name}Property()");
+                    builder.WriteLine($"DependencyProperty^ {sourceClassQualifier}{prop.Name}Property()");
                     builder.OpenScope();
                     builder.WriteLine($"return _{S.CamelCase(prop.Name)}Property;");
                     builder.CloseScope();
                     builder.WriteLine();
 
                     // Write the dependency property change handler.
-                    builder.WriteLine($"void {S.Namespace(SourceInfo.Namespace)}::{SourceClassName}::On{prop.Name}Changed(DependencyObject^ d, DependencyPropertyChangedEventArgs^ e)");
+                    builder.WriteLine($"void {sourceClassQualifier}On{prop.Name}Changed(DependencyObject^ d, DependencyPropertyChangedEventArgs^ e)");
                     builder.OpenScope();
-                    builder.WriteLine($"auto self = ({S.Namespace(SourceInfo.Namespace)}::{SourceClassName}^)d;");
+                    builder.WriteLine($"auto self = ({sourceClassQualifier}^)d;");
                     builder.WriteLine();
                     builder.WriteLine("if (self->_themeProperties != nullptr)");
                     builder.OpenScope();
@@ -153,22 +176,22 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     builder.WriteLine();
 
                     // Write the dependency property initializer.
-                    builder.WriteLine($"DependencyProperty^ {S.Namespace(SourceInfo.Namespace)}::{SourceClassName}::_{S.CamelCase(prop.Name)}Property =");
+                    builder.WriteLine($"DependencyProperty^ {sourceClassQualifier}_{S.CamelCase(prop.Name)}Property =");
                     builder.Indent();
                     builder.WriteLine($"DependencyProperty::Register(");
                     builder.Indent();
                     builder.WriteLine($"{S.String(prop.Name)},");
                     builder.WriteLine($"{TypeName(prop.ExposedType)}::typeid,");
-                    builder.WriteLine($"{S.Namespace(SourceInfo.Namespace)}::{SourceClassName}::typeid,");
+                    builder.WriteLine($"{sourceClassQualifier}typeid,");
                     builder.WriteLine($"ref new PropertyMetadata(c_theme{prop.Name},");
-                    builder.WriteLine($"ref new PropertyChangedCallback(&{S.Namespace(SourceInfo.Namespace)}::{SourceClassName}::On{prop.Name}Changed)));");
+                    builder.WriteLine($"ref new PropertyChangedCallback(&{sourceClassQualifier}On{prop.Name}Changed)));");
                     builder.UnIndent();
                     builder.UnIndent();
                     builder.WriteLine();
                 }
 
                 // Write the getter.
-                builder.WriteLine($"{TypeName(prop.ExposedType)} {S.Namespace(SourceInfo.Namespace)}::{SourceClassName}::{prop.Name}::get()");
+                builder.WriteLine($"{TypeName(prop.ExposedType)} {sourceClassQualifier}{prop.Name}::get()");
                 builder.OpenScope();
                 if (SourceInfo.GenerateDependencyObject)
                 {
@@ -185,7 +208,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 builder.WriteLine();
 
                 // Write the setter.
-                builder.WriteLine($"void {S.Namespace(SourceInfo.Namespace)}::{SourceClassName}::{prop.Name}::set({TypeName(prop.ExposedType)} value)");
+                builder.WriteLine($"void {sourceClassQualifier}{prop.Name}::set({TypeName(prop.ExposedType)} value)");
                 builder.OpenScope();
                 if (SourceInfo.GenerateDependencyObject)
                 {
@@ -204,6 +227,26 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
                 builder.CloseScope();
                 builder.WriteLine();
+            }
+        }
+
+        /// <inheritdoc/>
+        protected override void WriteAnimatedVisualStart(
+            CodeBuilder builder,
+            IAnimatedVisualInfo info)
+        {
+            // Start writing the instantiator.
+            builder.WriteLine($"ref class {info.ClassName} sealed");
+            builder.Indent();
+            builder.WriteLine($": public {AnimatedVisualTypeName}");
+            builder.UnIndent();
+            builder.OpenScope();
+
+            if (info.AnimatedVisualSourceInfo.UsesCanvasEffects ||
+                info.AnimatedVisualSourceInfo.UsesCanvasGeometry)
+            {
+                // D2D factory field.
+                builder.WriteLine("ComPtr<ID2D1Factory> _d2dFactory;");
             }
         }
     }

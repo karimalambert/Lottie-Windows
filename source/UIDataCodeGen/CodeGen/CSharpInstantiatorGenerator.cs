@@ -32,7 +32,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                   stringifier: stringifier)
         {
             _s = stringifier;
-            _interface = _s.Namespace(AnimatedVisualSourceInfo.Interface ?? "Microsoft.UI.Xaml.Controls.IAnimatedVisual");
+            _interface = $"{AnimatedVisualSourceInfo.Interface.GetNamespace(stringifier)}.{AnimatedVisualSourceInfo.Interface.UnqualifiedName}";
             _sourceInterface = _interface + "Source";
         }
 
@@ -325,7 +325,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 if (info.SourceMetadata.PropertyBindings.Any(pb => pb.ExposedType == PropertySetValueType.Color))
                 {
                     // There's at least one themed color. They will need a helper method to convert to Vector4.
-                    builder.WriteLine("static Vector4 ColorAsVector4(Color color) => new Vector4(color.R, color.G, color.B, color.A);");
+                    // The helper is internal so that it can be used by other code in the project to do
+                    // the conversion.
+                    builder.WriteLine("internal static Vector4 ColorAsVector4(Color color) => new Vector4(color.R, color.G, color.B, color.A);");
                     builder.WriteLine();
                 }
 

@@ -628,10 +628,9 @@ sealed class LottieFileProcessor
         var syntheticCommandLine =
             $"{_options.ToConfigurationCommandLine()} -Language {languageSwitch} -InputFile {System.IO.Path.GetFileName(_file)}";
 
-        return new CodegenConfiguration
+        var result = new CodegenConfiguration
         {
             ClassName = _className,
-            InterfaceType = string.IsNullOrWhiteSpace(_options.Interface) ? null : _options.Interface,
             Namespace = NormalizeNamespace(_options.Namespace),
             Width = _lottieComposition.Width,
             Height = _lottieComposition.Height,
@@ -642,6 +641,13 @@ sealed class LottieFileProcessor
             ObjectGraphs = _translationResults.Select(tr => ((CompositionObject)tr.RootVisual, tr.MinimumRequiredUapVersion)).ToArray(),
             ToolInfo = GetToolInvocationInfo(languageSwitch).ToArray(),
         };
+
+        if (!string.IsNullOrWhiteSpace(_options.Interface))
+        {
+            result.InterfaceType = _options.Interface;
+        }
+
+        return result;
     }
 
     // Returns lines that describe the invocation of this tool.

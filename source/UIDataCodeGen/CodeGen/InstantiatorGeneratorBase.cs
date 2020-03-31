@@ -53,7 +53,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         readonly SourceMetadata _sourceMetadata;
         readonly bool _isThemed;
         readonly IReadOnlyList<string> _toolInfo;
-        readonly string _interfaceType;
+        readonly TypeName _interfaceType;
         readonly IReadOnlyList<(Marker marker, string startConstant, string endConstant)> _lottieMarkers;
         readonly IReadOnlyList<NamedConstant> _internalConstants;
 
@@ -65,7 +65,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             Stringifier stringifier)
         {
             _className = configuration.ClassName;
-            _namespace = configuration.Namespace ?? "AnimatedVisuals";
+            _namespace = configuration.Namespace;
             _compositionDeclaredSize = new Vector2((float)configuration.Width, (float)configuration.Height);
             _sourceMetadata = new SourceMetadata(configuration.SourceMetadata);
             _compositionDuration = configuration.Duration;
@@ -74,7 +74,15 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             _generateDependencyObject = configuration.GenerateDependencyObject;
             _s = stringifier;
             _toolInfo = configuration.ToolInfo;
-            _interfaceType = configuration.InterfaceType;
+
+            var normalizedInterfaceName = configuration.InterfaceType.Replace("::", ".");
+            var endOfNamespaceIndex = normalizedInterfaceName.LastIndexOf('.');
+            _interfaceType = endOfNamespaceIndex == -1
+                ? new TypeName(string.Empty, configuration.InterfaceType)
+                : new TypeName(
+                    normalizedInterfaceName.Substring(0, endOfNamespaceIndex),
+                    normalizedInterfaceName.Substring(endOfNamespaceIndex + 1));
+
             _lottieMarkers = GetMarkers(_sourceMetadata.LottieMetadata).ToArray();
             _internalConstants = GetInternalConstants().ToArray();
 
@@ -389,6 +397,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         IEnumerable<NamedConstant> GetInternalConstants()
         {
+            // Get the duration in ticks.
+            yield return new NamedConstant(
+                "c_durationTicks",
+                $"Animation duration: {_compositionDuration.Ticks / (double)TimeSpan.TicksPerSecond,-1:N3} seconds.",
+                ConstantType.Int64,
+                _compositionDuration.Ticks);
+
             // Get the markers.
             foreach (var (marker, startConstant, endConstant) in _lottieMarkers)
             {
@@ -416,13 +431,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                         continue;
                 }
             }
-
-            // Get the duration in ticks.
-            yield return new NamedConstant(
-                "c_durationTicks",
-                $"Animation duration: {_compositionDuration.Ticks / (double)System.TimeSpan.TicksPerSecond,-1:N3} seconds.",
-                ConstantType.Int64,
-                _compositionDuration.Ticks);
         }
 
         // Returns a name that can be used as the name of a class constant.
@@ -710,7 +718,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         string IAnimatedVisualSourceInfo.Namespace => _namespace;
 
-        string IAnimatedVisualSourceInfo.Interface => _interfaceType;
+        TypeName IAnimatedVisualSourceInfo.Interface => _interfaceType;
 
         string IAnimatedVisualSourceInfo.ReusableExpressionAnimationFieldName => SingletonExpressionAnimationName;
 
@@ -921,10 +929,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                                 bytes: bytes);
         }
 
-        // Orders nodes by their name using alpha-numeric ordering (which is the most natural ordering for code
-        // names that contain embedded numbers).
+        // Orders nodes by their types, then their names using alpha-numeric ordering (which
+        // is the most natural ordering for code names that contain embedded numbers).
         static IEnumerable<ObjectData> OrderByName(IEnumerable<ObjectData> nodes) =>
-            nodes.OrderBy(n => n.Name, AlphanumericStringComparer.Instance);
+            nodes.OrderBy(n => n.TypeName).ThenBy(n => n.Name, AlphanumericStringComparer.Instance);
 
         // Orders nodes by their type name, then by their name using alpha-numeric ordering
         // (which is the most natural ordering for code names that contain embedded numbers).
@@ -2093,6 +2101,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 var b = builder.GetSubBuilder("CreateSpriteShape");
                 if (b.IsEmpty)
                 {
+                    WriteMatrixComment(builder, obj.TransformMatrix);
                     b.WriteLine($"{ReferenceTypeName("CompositionSpriteShape")} CreateSpriteShape({ReferenceTypeName("CompositionGeometry")} geometry, {_s.TypeMatrix3x2} transformMatrix)");
                     b.OpenScope();
                     b.WriteLine($"{ConstVar} result = _c{Deref}CreateSpriteShape(geometry);");
@@ -2110,6 +2119,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                 var b = builder.GetSubBuilder("CreateSpriteShapeWithFillBrush");
                 if (b.IsEmpty)
                 {
+                    WriteMatrixComment(builder, obj.TransformMatrix);
                     b.WriteLine($"{ReferenceTypeName("CompositionSpriteShape")} CreateSpriteShape({ReferenceTypeName("CompositionGeometry")} geometry, {_s.TypeMatrix3x2} transformMatrix, {ReferenceTypeName("CompositionBrush")} fillBrush)");
                     b.OpenScope();
                     b.WriteLine($"{ConstVar} result = _c{Deref}CreateSpriteShape(geometry);");
@@ -3073,30 +3083,36 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             uint IAnimatedVisualInfo.RequiredUapVersion => _requiredUapVersion;
 
-            static void WriteMatrixComment(CodeBuilder builder, Matrix3x2 matrix)
+            static void WriteMatrixComment(CodeBuilder builder, Matrix3x2? matrix)
             {
-                var (translation, rotationDegrees, scale, skew) = MatrixDecomposer.Decompose(matrix);
+                if (matrix.HasValue)
+                {
+                    var (translation, rotationDegrees, scale, skew) = MatrixDecomposer.Decompose(matrix.Value);
 
-                // Use the word "Offset" to be consistent with Composition APIs.
-                var t = translation.HasValue ? $"Offset:{translation}" : string.Empty;
-                var r = rotationDegrees.HasValue ? $"Rotation:{rotationDegrees} degrees" : string.Empty;
-                var sc = scale.HasValue ? $"Scale:{scale}" : string.Empty;
-                var sk = skew.HasValue ? $"Skew:{skew}" : string.Empty;
+                    // Use the word "Offset" to be consistent with Composition APIs.
+                    var t = translation.HasValue ? $"Offset:{translation}" : string.Empty;
+                    var r = rotationDegrees.HasValue ? $"Rotation:{rotationDegrees} degrees" : string.Empty;
+                    var sc = scale.HasValue ? $"Scale:{scale}" : string.Empty;
+                    var sk = skew.HasValue ? $"Skew:{skew}" : string.Empty;
 
-                builder.WriteComment(string.Join(", ", new[] { t, r, sc, sk }.Where(str => str.Length > 0)));
+                    builder.WriteComment(string.Join(", ", new[] { t, r, sc, sk }.Where(str => str.Length > 0)));
+                }
             }
 
-            static void WriteMatrixComment(CodeBuilder builder, Matrix4x4 matrix)
+            static void WriteMatrixComment(CodeBuilder builder, Matrix4x4? matrix)
             {
-                var (translation, rotation, scale) = MatrixDecomposer.Decompose(matrix);
+                if (matrix.HasValue)
+                {
+                    var (translation, rotation, scale) = MatrixDecomposer.Decompose(matrix.Value);
 
-                // Use the word "Offset" to be consistent with Composition APIs.
-                // Show only the x and y offsets and scales because we don't suport 3D Lottie.
-                var t = translation.HasValue ? $"Offset:<{translation.Value.X}, {translation.Value.Y}>" : string.Empty;
-                var r = rotation.HasValue ? $"Rotation:{rotation}" : string.Empty;
-                var sc = scale.HasValue ? $"Scale:<{scale.Value.X}, {scale.Value.Y}>" : string.Empty;
+                    // Use the word "Offset" to be consistent with Composition APIs.
+                    // Show only the x and y offsets and scales because we don't suport 3D Lottie.
+                    var t = translation.HasValue ? $"Offset:<{translation.Value.X}, {translation.Value.Y}>" : string.Empty;
+                    var r = rotation.HasValue ? $"Rotation:{rotation}" : string.Empty;
+                    var sc = scale.HasValue ? $"Scale:<{scale.Value.X}, {scale.Value.Y}>" : string.Empty;
 
-                builder.WriteComment(string.Join(", ", new[] { t, r, sc }.Where(str => str.Length > 0)));
+                    builder.WriteComment(string.Join(", ", new[] { t, r, sc }.Where(str => str.Length > 0)));
+                }
             }
         }
 

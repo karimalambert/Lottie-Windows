@@ -24,10 +24,9 @@ sealed class Program
 
     static int Main(string[] args)
     {
-        var infoStream = Console.Out;
-        var errorStream = Console.Out;
+        var reporter = new Reporter(infoStream: Console.Out, errorStream: Console.Out);
 
-        switch (new Program(CommandLineOptions.ParseCommandLine(args), infoStream: infoStream, errorStream: errorStream).Run())
+        switch (new Program(CommandLineOptions.ParseCommandLine(args), reporter).Run())
         {
             case RunResult.Success:
                 return 0;
@@ -36,8 +35,8 @@ sealed class Program
                 return 1;
 
             case RunResult.InvalidUsage:
-                errorStream.WriteLine();
-                ShowUsage(errorStream);
+                reporter.ErrorStream.WriteLine();
+                ShowUsage(reporter.ErrorStream);
                 return 1;
 
             default:
@@ -46,10 +45,10 @@ sealed class Program
         }
     }
 
-    Program(CommandLineOptions options, TextWriter infoStream, TextWriter errorStream)
+    Program(CommandLineOptions options, Reporter reporter)
     {
         _options = options;
-        _reporter = new Reporter(infoStream, errorStream);
+        _reporter = reporter;
     }
 
     RunResult Run()
@@ -218,14 +217,14 @@ sealed class Program
         return System.IO.Path.IsPathRooted(path) ? path : System.IO.Path.Combine(Directory.GetCurrentDirectory(), path);
     }
 
-    static void ShowHelp(TextWriter writer)
+    static void ShowHelp(Reporter.Writer writer)
     {
         writer.WriteLine("Generates source code from Lottie .json files.");
         writer.WriteLine();
         ShowUsage(writer);
     }
 
-    static void ShowUsage(TextWriter writer)
+    static void ShowUsage(Reporter.Writer writer)
     {
         writer.WriteLine(Usage);
     }
@@ -247,28 +246,31 @@ OVERVIEW:
                        Disables optimization of the translation from Lottie to
                        Windows code. Mainly used to detect bugs in the optimizer.
          -DisableCodeGenOptimizer
-                       Disables optimization done by the code generator. This is 
+                       Disables optimization done by the code generator. This is
                        useful when the generated code is going to be hacked on.
          -GenerateDependencyObject
                        Generates code that extends DependencyObject. This is useful
                        to allow XAML binding to properties in the Lottie source.
+         -Interface    Specifies the name of the interface to implement in the generated
+                       code. Defaults to Microsoft.UI.Xaml.Controls.IAnimatedVisual.
          -MinimumUapVersion
-                       The lowest UAP version on which the result must run. Defaults 
+                       The lowest UAP version on which the result must run. Defaults
                        to 7. Must be 7 or higher. Code will be generated that will
                        run down to this version. If less than TargetUapVersion,
                        extra code will be generated if necessary to support the
                        lower versions.
-         -Namespace    Specifies the namespace for the generated code.
+         -Namespace    Specifies the namespace for the generated code. Defaults to
+                       AnimatedVisuals.
          -OutputFolder Specifies the output folder for the generated files. If not
                        specified the files will be written to the current directory.
-         -StrictMode   Fails on any parsing or translation issue. If not specified, 
-                       a best effort will be made to create valid output, and any 
+         -StrictMode   Fails on any parsing or translation issue. If not specified,
+                       a best effort will be made to create valid output, and any
                        issues will be reported to STDOUT.
          -TargetUapVersion
                        The target UAP version on which the result will run. Must be 7
                        or higher and >= MinimumUapVersion. Code will be generated
                        that may take advantage of features in this version in order
-                       to produce a better result. If not specified, defaults to 
+                       to produce a better result. If not specified, defaults to
                        the latest UAP version.
 
 EXAMPLES:
@@ -282,6 +284,6 @@ EXAMPLES:
        Keywords can be abbreviated and are case insensitive.
        Generate Bar.cs in the C:\temp directory from the Lottie file Bar.json:
 
-         {0} -i Bar.json -L cs -o C:\temp",
+         {0} -inp Bar.json -L cs -o C:\temp",
 System.IO.Path.GetFileNameWithoutExtension(Assembly.GetEntryAssembly().ManifestModule.Name));
 }

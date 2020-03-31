@@ -9,7 +9,7 @@ using Microsoft.Toolkit.Uwp.UI.Lottie.WinCompData;
 namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 {
     /// <summary>
-    /// Specifies the configuration of a code generators.
+    /// Specifies the configuration of a code generator.
     /// </summary>
 #if PUBLIC_UIDataCodeGen
     public
@@ -22,9 +22,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         public string ClassName { get; set; }
 
         /// <summary>
-        /// The namespace for the generated code.
+        /// The namespace for the generated code. If not set, defaults to "AnimatedVisuals".
         /// </summary>
-        public string Namespace { get; set; }
+        public string Namespace { get; set; } = "AnimatedVisuals";
 
         /// <summary>
         /// The width of the animated visual.
@@ -60,7 +60,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         /// "Microsoft.UI.Xaml.Controls.IAnimatedVisual" which will cause the generation
         /// of code for IAnimatedVisualSource and IAnimatedVisual.
         /// </summary>
-        public string InterfaceType { get; set; }
+        public string InterfaceType { get; set; } = "Microsoft.UI.Xaml.Controls.IAnimatedVisual";
 
         /// <summary>
         /// The object graphs for which source will be generated.

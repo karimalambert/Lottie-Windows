@@ -356,7 +356,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             {
                 // Canonicalize color brushes that have a single property set value. These
                 // are likely to be themed color brushes.
-                var nodes = GetCompositionObjects<CompositionColorBrush>(CompositionObjectType.CompositionColorBrush);
+                var nodes = GetCompositionObjects<CompositionColorBrush>(CompositionObjectType.CompositionColorBrush).ToArray();
 
                 var items =
                     from item in nodes
@@ -374,7 +374,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                     let animator = animators[0]
                     where animator.AnimatedProperty == "Color"
                         && animator.Animation.Type == CompositionObjectType.ExpressionAnimation
-                    let key = new ThemeBrushKey(obj)
+                    let key = new ThemeBrushKey(this, obj)
                     group item.Node by key into grouped
                     select grouped;
 
@@ -383,11 +383,13 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
 
             sealed class ThemeBrushKey : IEquatable<ThemeBrushKey>
             {
+                readonly CanonicalizerWorker<TNode> _owner;
                 readonly CompositionColorBrush _brush;
                 readonly ExpressionAnimation _animation;
 
-                internal ThemeBrushKey(CompositionColorBrush brush)
+                internal ThemeBrushKey(CanonicalizerWorker<TNode> owner, CompositionColorBrush brush)
                 {
+                    _owner = owner;
                     var animators = brush.Animators.ToArray();
 
                     if (animators.Length != 1)
@@ -459,6 +461,32 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
                                     // They're references to a property set. Is it the property set on the brush?
                                     if (thisPropertySet.Owner != _brush ||
                                         otherPropertySet.Owner != other._brush)
+                                    {
+                                        return false;
+                                    }
+
+                                    // They're both references to their own property set. Make sure each property set
+                                    // has the same properties and the same animations.
+                                    var thispAnimators = thisPropertySet.Animators;
+                                    var otherpAnimators = otherPropertySet.Animators;
+                                    if (thispAnimators.Count != otherpAnimators.Count)
+                                    {
+                                        return false;
+                                    }
+
+                                    if (thispAnimators.Count != 1)
+                                    {
+                                        // For now we only handle a single animator.
+                                    }
+
+                                    var thisAnimator = thispAnimators[0];
+                                    var otherAnimator = otherpAnimators[0];
+                                    if (thisAnimator.AnimatedProperty != otherAnimator.AnimatedProperty)
+                                    {
+                                        return false;
+                                    }
+
+                                    if (_owner.NodeFor(thisAnimator.Animation).Canonical != _owner.NodeFor(otherAnimator.Animation))
                                     {
                                         return false;
                                     }

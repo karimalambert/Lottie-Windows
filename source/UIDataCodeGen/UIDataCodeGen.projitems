@@ -34,6 +34,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)CodeGen\Tables\Row.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)CodeGen\Tables\TextAlignment.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)CodeGen\Tables\ThemePropertiesMonospaceTableFormatter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)CodeGen\TypeName.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Serialization\CompositionObjectDgmlSerializer.cs" />
   </ItemGroup>
 </Project>
