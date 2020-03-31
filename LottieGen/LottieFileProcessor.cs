@@ -631,7 +631,6 @@ sealed class LottieFileProcessor
         var result = new CodegenConfiguration
         {
             ClassName = _className,
-            Namespace = NormalizeNamespace(_options.Namespace),
             Width = _lottieComposition.Width,
             Height = _lottieComposition.Height,
             Duration = _lottieComposition.Duration,
@@ -645,6 +644,11 @@ sealed class LottieFileProcessor
         if (!string.IsNullOrWhiteSpace(_options.Interface))
         {
             result.InterfaceType = _options.Interface;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_options.Namespace))
+        {
+            result.Namespace = NormalizeNamespace(_options.Namespace);
         }
 
         return result;

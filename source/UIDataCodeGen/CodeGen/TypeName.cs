@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System;
+
 namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 {
     /// <summary>
@@ -16,8 +18,27 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         internal TypeName(string namespaceName, string unqualifiedName)
         {
+            if (namespaceName.Contains(':'))
+            {
+                throw new ArgumentException();
+            }
+
             _namespaceName = namespaceName;
             UnqualifiedName = unqualifiedName;
+        }
+
+        internal TypeName(string qualifiedName)
+            => (_namespaceName, UnqualifiedName) = ParseQualifiedName(qualifiedName);
+
+        static (string namespaceName, string unqualifiedName) ParseQualifiedName(string qualifiedName)
+        {
+            var normalizedInterfaceName = qualifiedName.Replace("::", ".");
+            var endOfNamespaceIndex = normalizedInterfaceName.LastIndexOf('.');
+            return endOfNamespaceIndex == -1
+                ? (string.Empty, qualifiedName)
+                : (
+                    normalizedInterfaceName.Substring(0, endOfNamespaceIndex),
+                    normalizedInterfaceName.Substring(endOfNamespaceIndex + 1));
         }
 
         public string UnqualifiedName { get; }
@@ -26,5 +47,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         {
             return stringifier.Namespace(_namespaceName);
         }
+
+        public string NormalizedQualifiedName => $"{_namespaceName}.{UnqualifiedName}";
     }
 }

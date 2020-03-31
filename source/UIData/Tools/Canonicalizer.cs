@@ -356,7 +356,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.Tools
             {
                 // Canonicalize color brushes that have a single property set value. These
                 // are likely to be themed color brushes.
-                var nodes = GetCompositionObjects<CompositionColorBrush>(CompositionObjectType.CompositionColorBrush).ToArray();
+                var nodes = GetCompositionObjects<CompositionColorBrush>(CompositionObjectType.CompositionColorBrush);
 
                 var items =
                     from item in nodes

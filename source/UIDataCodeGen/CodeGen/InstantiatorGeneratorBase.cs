@@ -77,11 +77,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             var normalizedInterfaceName = configuration.InterfaceType.Replace("::", ".");
             var endOfNamespaceIndex = normalizedInterfaceName.LastIndexOf('.');
-            _interfaceType = endOfNamespaceIndex == -1
-                ? new TypeName(string.Empty, configuration.InterfaceType)
-                : new TypeName(
-                    normalizedInterfaceName.Substring(0, endOfNamespaceIndex),
-                    normalizedInterfaceName.Substring(endOfNamespaceIndex + 1));
+            _interfaceType = new TypeName(configuration.InterfaceType);
 
             _lottieMarkers = GetMarkers(_sourceMetadata.LottieMetadata).ToArray();
             _internalConstants = GetInternalConstants().ToArray();
