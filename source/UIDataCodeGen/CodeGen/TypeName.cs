@@ -43,11 +43,21 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         public string UnqualifiedName { get; }
 
-        public string GetNamespace(Stringifier stringifier)
-        {
-            return stringifier.Namespace(_namespaceName);
-        }
+        public string GetQualifiedName(Stringifier stringifier)
+            => string.IsNullOrWhiteSpace(_namespaceName)
+                ? UnqualifiedName
+                : stringifier.Namespace(_namespaceName + UnqualifiedName);
 
-        public string NormalizedQualifiedName => $"{_namespaceName}.{UnqualifiedName}";
+        public string GetNamespace(Stringifier stringifier)
+            => stringifier.Namespace(_namespaceName);
+
+        /// <summary>
+        /// A non-language-specific name that can be used for display
+        /// and comparison.
+        /// </summary>
+        public string NormalizedQualifiedName
+            => string.IsNullOrWhiteSpace(_namespaceName)
+                ? UnqualifiedName
+                : $"{_namespaceName}.{UnqualifiedName}";
     }
 }

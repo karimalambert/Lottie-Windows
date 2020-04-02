@@ -42,7 +42,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             _typeName = new TypeNames(stringifier, isCppwinrtMode);
             SourceClassName = AnimatedVisualSourceInfo.ClassName;
             var iface = AnimatedVisualSourceInfo.Interface;
-            AnimatedVisualTypeName = $"{iface.GetNamespace(S)}::{iface.UnqualifiedName}";
+            AnimatedVisualTypeName = iface.GetQualifiedName(S);
         }
 
         protected IAnimatedVisualSourceInfo SourceInfo => AnimatedVisualSourceInfo;

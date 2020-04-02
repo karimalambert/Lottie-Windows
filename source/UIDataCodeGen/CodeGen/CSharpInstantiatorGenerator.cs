@@ -32,7 +32,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                   stringifier: stringifier)
         {
             _s = stringifier;
-            _interface = $"{AnimatedVisualSourceInfo.Interface.GetNamespace(stringifier)}.{AnimatedVisualSourceInfo.Interface.UnqualifiedName}";
+            _interface = AnimatedVisualSourceInfo.Interface.GetQualifiedName(stringifier);
             _sourceInterface = _interface + "Source";
         }
 
