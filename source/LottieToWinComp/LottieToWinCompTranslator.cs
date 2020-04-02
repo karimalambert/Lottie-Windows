@@ -453,18 +453,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                         break;
                 }
 
-                var geometry = context.TrimAnimatable(_lottieDataOptimizer.GetOptimized(mask.Points));
-
                 var compositionPathGeometry = _c.CreatePathGeometry();
-                compositionPathGeometry.Path = CompositionPathFromPathGeometry(
-                    geometry.InitialValue,
-                    ShapeFill.PathFillType.EvenOdd,
-                    optimizeLines: true);
 
-                if (geometry.IsAnimated)
-                {
-                    ApplyPathKeyFrameAnimation(context, geometry, ShapeFill.PathFillType.EvenOdd, compositionPathGeometry, "Path", "Path", null);
-                }
+                ApplyPath(context, compositionPathGeometry, mask.Points, ShapeFill.PathFillType.EvenOdd);
 
                 var maskSpriteShape = _c.CreateSpriteShape();
                 maskSpriteShape.Geometry = compositionPathGeometry;
@@ -2448,31 +2439,18 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
         {
             CheckForRoundedCornersOnPath(context, shapeContext);
 
-            // Map Path's Geometry data to PathGeometry.Path
-            var pathGeometry = context.TrimAnimatable(_lottieDataOptimizer.GetOptimized(path.Data));
-
             // A path is represented as a SpriteShape with a CompositionPathGeometry.
-            var compositionPathGeometry = _c.CreatePathGeometry();
+            var geometry = _c.CreatePathGeometry();
 
             var compositionSpriteShape = _c.CreateSpriteShape();
-            compositionSpriteShape.Geometry = compositionPathGeometry;
+            compositionSpriteShape.Geometry = geometry;
 
-            if (pathGeometry.IsAnimated)
-            {
-                ApplyPathKeyFrameAnimation(context, pathGeometry, GetPathFillType(shapeContext.Fill), compositionPathGeometry, nameof(compositionPathGeometry.Path), "Path");
-            }
-            else
-            {
-                compositionPathGeometry.Path = CompositionPathFromPathGeometry(
-                    pathGeometry.InitialValue,
-                    GetPathFillType(shapeContext.Fill),
-                    optimizeLines: true);
-            }
+            ApplyPath(context, geometry, path.Data, GetPathFillType(shapeContext.Fill));
 
             if (_addDescriptions)
             {
                 Describe(compositionSpriteShape, path.Name);
-                Describe(compositionPathGeometry, $"{path.Name}.PathGeometry");
+                Describe(geometry, $"{path.Name}.PathGeometry");
             }
 
             TranslateAndApplyShapeContentContext(context, shapeContext, compositionSpriteShape, 0);
@@ -3784,6 +3762,28 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             controller.StartAnimation("Progress", bindingAnimation);
         }
 
+        void ApplyPath(
+            TranslationContext context,
+            CompositionPathGeometry targetGeometry,
+            Animatable<Sequence<BezierSegment>> path,
+            ShapeFill.PathFillType fillType)
+        {
+            var optimizedPathAnimatable = context.TrimAnimatable(_lottieDataOptimizer.GetOptimized(path));
+
+            // PathKeyFrameAnimation was introduced in 6 but was unreliable until 11.
+            if (optimizedPathAnimatable.IsAnimated && IsUapApiAvailable(nameof(PathKeyFrameAnimation), versionDependentFeatureDescription: "Path animation"))
+            {
+                ApplyPathKeyFrameAnimation(context, optimizedPathAnimatable, fillType, targetGeometry, nameof(targetGeometry.Path), nameof(targetGeometry.Path));
+            }
+            else
+            {
+                targetGeometry.Path = CompositionPathFromPathGeometry(
+                    optimizedPathAnimatable.InitialValue,
+                    fillType,
+                    optimizeLines: true);
+            }
+        }
+
         void ApplyRotationKeyFrameAnimation(
             TranslationContext context,
             in TrimmedAnimatable<Rotation> value,
@@ -3992,6 +3992,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                 string shortDescription = null)
         {
             Debug.Assert(value.IsAnimated, "Precondition");
+
             GenericCreateCompositionKeyFrameAnimation(
                 context,
                 value,

@@ -75,6 +75,12 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
                 case nameof(CompositionVisualSurface):
                     return 8;
 
+                // Classes introduced in version 11.
+                // PathKeyFrameAnimation was introduced in 6, but was unreliable
+                // until 11.
+                case nameof(PathKeyFrameAnimation):
+                    return 11;
+
                 default:
                     throw new InvalidOperationException();
             }
@@ -188,7 +194,12 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.LottieToWinComp
             return result;
         }
 
-        internal PathKeyFrameAnimation CreatePathKeyFrameAnimation() => _compositor.CreatePathKeyFrameAnimation();
+        internal PathKeyFrameAnimation CreatePathKeyFrameAnimation()
+        {
+            // PathKeyFrameAnimation was added in 6 but was unreliable until 11.
+            ConsumeVersionFeature(11);
+            return _compositor.CreatePathKeyFrameAnimation();
+        }
 
         internal Vector2KeyFrameAnimation CreateVector2KeyFrameAnimation() => _compositor.CreateVector2KeyFrameAnimation();
 
