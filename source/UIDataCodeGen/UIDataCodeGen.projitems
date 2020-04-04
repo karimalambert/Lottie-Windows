@@ -17,6 +17,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)CodeGen\CSharpInstantiatorGenerator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)CodeGen\CxInstantiatorGenerator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)CodeGen\CxStringifier.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)CodeGen\HeaderBuilder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)CodeGen\IAnimatedVisualInfo.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)CodeGen\IAnimatedVisualSourceInfo.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)CodeGen\InstantiatorGeneratorBase.cs" />

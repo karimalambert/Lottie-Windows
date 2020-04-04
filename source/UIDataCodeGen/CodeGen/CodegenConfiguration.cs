@@ -77,5 +77,10 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         /// This information will be included in comments in the generated source.
         /// </summary>
         public IReadOnlyList<string> ToolInfo { get; set; }
+
+        /// <summary>
+        /// When <c>true</c> the generated class is made public.
+        /// </summary>
+        public bool Public { get; set; }
     }
 }

@@ -263,6 +263,7 @@ OVERVIEW:
                        AnimatedVisuals.
          -OutputFolder Specifies the output folder for the generated files. If not
                        specified the files will be written to the current directory.
+         -Public       Makes the generated class public.
          -StrictMode   Fails on any parsing or translation issue. If not specified,
                        a best effort will be made to create valid output, and any
                        issues will be reported to STDOUT.

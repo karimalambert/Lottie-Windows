@@ -46,6 +46,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         readonly bool _setCommentProperties;
         readonly bool _disableFieldOptimization;
         readonly bool _generateDependencyObject;
+        readonly bool _generatePublicClass;
         readonly Stringifier _s;
         readonly IReadOnlyList<AnimatedVisualGenerator> _animatedVisualGenerators;
         readonly LoadedImageSurfaceInfo[] _loadedImageSurfaceInfos;
@@ -72,11 +73,9 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             _setCommentProperties = setCommentProperties;
             _disableFieldOptimization = configuration.DisableOptimization;
             _generateDependencyObject = configuration.GenerateDependencyObject;
+            _generatePublicClass = configuration.Public;
             _s = stringifier;
             _toolInfo = configuration.ToolInfo;
-
-            var normalizedInterfaceName = configuration.InterfaceType.Replace("::", ".");
-            var endOfNamespaceIndex = normalizedInterfaceName.LastIndexOf('.');
             _interfaceType = new TypeName(configuration.InterfaceType);
 
             _lottieMarkers = GetMarkers(_sourceMetadata.LottieMetadata).ToArray();
@@ -714,13 +713,15 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         string IAnimatedVisualSourceInfo.Namespace => _namespace;
 
-        TypeName IAnimatedVisualSourceInfo.Interface => _interfaceType;
+        TypeName IAnimatedVisualSourceInfo.InterfaceType => _interfaceType;
 
         string IAnimatedVisualSourceInfo.ReusableExpressionAnimationFieldName => SingletonExpressionAnimationName;
 
         string IAnimatedVisualSourceInfo.DurationTicksFieldName => DurationTicksFieldName;
 
         bool IAnimatedVisualSourceInfo.GenerateDependencyObject => _generateDependencyObject;
+
+        bool IAnimatedVisualSourceInfo.Public => _generatePublicClass;
 
         string IAnimatedVisualSourceInfo.ThemePropertiesFieldName => ThemePropertiesFieldName;
 

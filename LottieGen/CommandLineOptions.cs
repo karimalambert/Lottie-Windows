@@ -29,11 +29,17 @@ sealed class CommandLineOptions
 {
     readonly List<string> _languageStrings = new List<string>();
 
+    internal bool DisableTranslationOptimizer { get; private set; }
+
+    internal bool DisableCodeGenOptimizer { get; private set; }
+
     // The parse error, or null if the parse succeeded.
     // The error should be a sentence (starts with a capital letter, and ends with a period).
     internal string ErrorDescription { get; private set; }
 
     internal bool GenerateDependencyObject { get; private set; }
+
+    internal bool HelpRequested { get; private set; }
 
     internal string InputFile { get; private set; }
 
@@ -41,19 +47,15 @@ sealed class CommandLineOptions
 
     internal IEnumerable<Lang> Languages { get; private set; }
 
-    internal string OutputFolder { get; private set; }
+    internal uint? MinimumUapVersion { get; private set; }
 
     internal string Namespace { get; private set; }
 
+    internal string OutputFolder { get; private set; }
+
+    internal bool Public { get; private set; }
+
     internal bool StrictMode { get; private set; }
-
-    internal bool HelpRequested { get; private set; }
-
-    internal bool DisableTranslationOptimizer { get; private set; }
-
-    internal bool DisableCodeGenOptimizer { get; private set; }
-
-    internal uint? MinimumUapVersion { get; private set; }
 
     internal uint? TargetUapVersion { get; private set; }
 
@@ -97,6 +99,11 @@ sealed class CommandLineOptions
             sb.Append($" -{nameof(Namespace)} {Namespace}");
         }
 
+        if (Public)
+        {
+            sb.Append($" -{nameof(Public)}");
+        }
+
         if (StrictMode)
         {
             sb.Append($" -{nameof(StrictMode)}");
@@ -134,6 +141,7 @@ sealed class CommandLineOptions
         MinimumUapVersion,
         Namespace,
         OutputFolder,
+        Public,
         Strict,
         TargetUapVersion,
         TestMode,
@@ -196,6 +204,7 @@ sealed class CommandLineOptions
             .AddPrefixedKeyword("minimumuapversion", Keyword.MinimumUapVersion)
             .AddPrefixedKeyword("namespace", Keyword.Namespace)
             .AddPrefixedKeyword("outputfolder", Keyword.OutputFolder)
+            .AddPrefixedKeyword("public", Keyword.Public)
             .AddPrefixedKeyword("strict", Keyword.Strict)
             .AddPrefixedKeyword("targetuapversion", Keyword.TargetUapVersion)
             .AddPrefixedKeyword("testmode", Keyword.TestMode);
@@ -237,6 +246,9 @@ sealed class CommandLineOptions
                             break;
                         case Keyword.DisableTranslationOptimizer:
                             DisableTranslationOptimizer = true;
+                            break;
+                        case Keyword.Public:
+                            Public = true;
                             break;
 
                         // The following keywords require a parameter as the next token.

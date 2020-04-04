@@ -43,72 +43,59 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             var cppText = generator.GenerateCode();
 
-            var hText = generator.GenerateHeaderText();
+            var hText = generator.GenerateHeaderText(generator.AnimatedVisualSourceInfo);
 
             var assetList = generator.GetAssetsList();
 
             return (cppText, hText, assetList);
         }
 
-        protected override void WritePrivateThemeHeader(CodeBuilder builder)
+        protected override void WriteThemeHeader(HeaderBuilder builder)
         {
             // Add a field to hold the theme property set.
-            builder.WriteLine($"{Wuc}::{T.CompositionPropertySet} {SourceInfo.ThemePropertiesFieldName}{{ nullptr }};");
+            builder.Private.WriteLine($"{Wuc}::{T.CompositionPropertySet} {SourceInfo.ThemePropertiesFieldName}{{ nullptr }};");
 
-            // Add fields for each of the theme properties.
-            foreach (var prop in SourceInfo.SourceMetadata.PropertyBindings)
-            {
-                if (SourceInfo.GenerateDependencyObject)
-                {
-                    builder.WriteLine($"static Windows::UI::Xaml::DependencyProperty^ _{S.CamelCase(prop.Name)}Property;");
-                    builder.WriteLine($"static void On{prop.Name}Changed(Windows::UI::Xaml::DependencyObject^ d, Windows::UI::Xaml::DependencyPropertyChangedEventArgs^ e);");
-                }
-                else
-                {
-                    var exposedTypeName = QualifiedTypeName(prop.ExposedType);
+            builder.Internal.WriteComment("Theme properties.");
 
-                    WriteInitializedField(builder, exposedTypeName, $"_theme{prop.Name}", S.VariableInitialization($"c_theme{prop.Name}"));
-                }
-            }
+            var hasColorProperty = false;
 
-            builder.WriteLine($"{Wuc}::{T.CompositionPropertySet} EnsureThemeProperties({Wuc}::{T.Compositor} compositor);");
-            builder.WriteLine();
-        }
-
-        protected override void WriteInternalAccessibility(CodeBuilder builder)
-        {
-            builder.WriteLine("internal:");
-        }
-
-        protected override void WriteInternalThemeHeader(CodeBuilder builder)
-        {
-            bool hasColorProperty = false;
-
-            // Write properties declarations for each themed property.
+            // Add fields and proeprty declarations for each of the theme properties.
             foreach (var prop in SourceInfo.SourceMetadata.PropertyBindings)
             {
                 hasColorProperty |= prop.ExposedType == PropertySetValueType.Color;
 
                 if (SourceInfo.GenerateDependencyObject)
                 {
-                    builder.WriteLine($"static Windows::UI::Xaml::DependencyProperty^ {prop.Name}Property();");
-                    builder.WriteLine();
+                    builder.Private.WriteLine($"static Windows::UI::Xaml::DependencyProperty^ _{S.CamelCase(prop.Name)}Property;");
+                    builder.Private.WriteLine($"static void On{prop.Name}Changed(Windows::UI::Xaml::DependencyObject^ d, Windows::UI::Xaml::DependencyPropertyChangedEventArgs^ e);");
+                    builder.Internal.WriteLine($"static Windows::UI::Xaml::DependencyProperty^ {prop.Name}Property();");
+                    builder.Internal.WriteLine();
+                }
+                else
+                {
+                    var exposedTypeName = QualifiedTypeName(prop.ExposedType);
+
+                    WriteInitializedField(builder.Private, exposedTypeName, $"_theme{prop.Name}", S.VariableInitialization($"c_theme{prop.Name}"));
                 }
 
-                builder.WriteLine($"property {QualifiedTypeName(prop.ExposedType)} {prop.Name}");
-                builder.OpenScope();
-                builder.WriteLine($"{QualifiedTypeName(prop.ExposedType)} get();");
-                builder.WriteLine($"void set ({QualifiedTypeName(prop.ExposedType)} value);");
-                builder.CloseScope();
-                builder.WriteLine();
+                builder.Internal.WriteLine($"property {QualifiedTypeName(prop.ExposedType)} {prop.Name}");
+                builder.Internal.OpenScope();
+                builder.Internal.WriteLine($"{QualifiedTypeName(prop.ExposedType)} get();");
+                builder.Internal.WriteLine($"void set ({QualifiedTypeName(prop.ExposedType)} value);");
+                builder.Internal.CloseScope();
+                builder.Internal.WriteLine();
             }
+
+            builder.Private.WriteLine();
+            builder.Private.WriteLine($"{Wuc}::{T.CompositionPropertySet} EnsureThemeProperties({Wuc}::{T.Compositor} compositor);");
+            builder.Private.WriteLine();
 
             if (hasColorProperty)
             {
-                builder.WriteLine("static Windows::Foundation::Numerics::float4 ColorAsVector4(Windows::UI::Color color);");
+                var b = IsInterfaceCustom ? builder.Internal : builder.Private;
+                b.WriteLine("static Windows::Foundation::Numerics::float4 ColorAsVector4(Windows::UI::Color color);");
+                b.WriteLine();
             }
-
-            builder.WriteLine();
         }
 
         protected override void WriteThemePropertyImpls(CodeBuilder builder)
@@ -145,11 +132,18 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
             builder.CloseScope();
             builder.WriteLine();
 
-            builder.WriteLine($"{T.CompositionPropertySet} {sourceClassQualifier}GetThemeProperties({T.Compositor} compositor)");
-            builder.OpenScope();
-            builder.WriteLine("return EnsureThemeProperties(compositor);");
-            builder.CloseScope();
-            builder.WriteLine();
+            // The GetThemeProperties method is designed to allow setting of properties when the actual
+            // type of the IAnimatedVisualSource is not known. It relies on a custom interface that declares
+            // it, so if we're not generating code for a custom interface, there's no reason to generate
+            // the method.
+            if (IsInterfaceCustom)
+            {
+                builder.WriteLine($"{T.CompositionPropertySet} {sourceClassQualifier}GetThemeProperties({T.Compositor} compositor)");
+                builder.OpenScope();
+                builder.WriteLine("return EnsureThemeProperties(compositor);");
+                builder.CloseScope();
+                builder.WriteLine();
+            }
 
             // Write property implementations for each theme property.
             foreach (var prop in propertyBindings)

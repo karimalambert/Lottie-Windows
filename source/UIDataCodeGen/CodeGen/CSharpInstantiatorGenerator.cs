@@ -32,7 +32,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                   stringifier: stringifier)
         {
             _s = stringifier;
-            _interface = AnimatedVisualSourceInfo.Interface.GetQualifiedName(stringifier);
+            _interface = AnimatedVisualSourceInfo.InterfaceType.GetQualifiedName(stringifier);
             _sourceInterface = _interface + "Source";
         }
 
@@ -223,13 +223,15 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         /// </summary>
         void WriteIAnimatedVisualSource(CodeBuilder builder, IAnimatedVisualSourceInfo info)
         {
+            var visibility = info.Public ? "public " : string.Empty;
+
             if (info.GenerateDependencyObject)
             {
-                builder.WriteLine($"sealed class {info.ClassName} : DependencyObject, {_sourceInterface}");
+                builder.WriteLine($"{visibility}sealed class {info.ClassName} : DependencyObject, {_sourceInterface}");
             }
             else
             {
-                builder.WriteLine($"sealed class {info.ClassName} : {_sourceInterface}");
+                builder.WriteLine($"{visibility}sealed class {info.ClassName} : {_sourceInterface}");
             }
 
             builder.OpenScope();
@@ -316,18 +318,28 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     WriteThemeProperties(builder, info);
                 }
 
-                builder.WriteLine("public CompositionPropertySet GetThemeProperties(Compositor compositor)");
-                builder.OpenScope();
-                builder.WriteLine("return EnsureThemeProperties(compositor);");
-                builder.CloseScope();
-                builder.WriteLine();
+                var isInterfaceCustom = info.InterfaceType.NormalizedQualifiedName != "Microsoft.UI.Xaml.Controls.IAnimatedVisual";
+
+                // The GetThemeProperties method is designed to allow setting of properties when the actual
+                // type of the IAnimatedVisualSource is not known. It relies on a custom interface that declares
+                // it, so if we're not generating code for a custom interface, there's no reason to generate
+                // the method.
+                if (info.InterfaceType.NormalizedQualifiedName != "Microsoft.UI.Xaml.Controls.IAnimatedVisual")
+                {
+                    builder.WriteLine("public CompositionPropertySet GetThemeProperties(Compositor compositor)");
+                    builder.OpenScope();
+                    builder.WriteLine("return EnsureThemeProperties(compositor);");
+                    builder.CloseScope();
+                    builder.WriteLine();
+                }
 
                 if (info.SourceMetadata.PropertyBindings.Any(pb => pb.ExposedType == PropertySetValueType.Color))
                 {
                     // There's at least one themed color. They will need a helper method to convert to Vector4.
-                    // The helper is internal so that it can be used by other code in the project to do
-                    // the conversion.
-                    builder.WriteLine("internal static Vector4 ColorAsVector4(Color color) => new Vector4(color.R, color.G, color.B, color.A);");
+                    // If we're generating a custom interface then users may want to sue GetThemeProperties
+                    // to set a property color, so in that case make the helper method available to them.
+                    var visibility = isInterfaceCustom ? "internal " : string.Empty;
+                    builder.WriteLine($"{visibility}static Vector4 ColorAsVector4(Color color) => new Vector4(color.R, color.G, color.B, color.A);");
                     builder.WriteLine();
                 }
 

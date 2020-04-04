@@ -29,7 +29,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         /// Gets the name of the interface for the generated code, or null to generate
         /// IAnimatedVisual/IAnimatedVisualSource.
         /// </summary>
-        TypeName Interface { get; }
+        TypeName InterfaceType { get; }
 
         /// <summary>
         /// Gets the name of the field in the instantiator class that holds the reusable ExpressionAnimation.
@@ -60,6 +60,11 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         /// Gets the declared size of the composition.
         /// </summary>
         Vector2 CompositionDeclaredSize { get; }
+
+        /// <summary>
+        /// True if the IAnimatedVisualSource should be public.
+        /// </summary>
+        bool Public { get; }
 
         /// <summary>
         /// Gets a value indicating whether the composition depends on the Microsoft.Graphics.Canvas namespace.

@@ -43,25 +43,25 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
             var cppText = generator.GenerateCode();
 
-            var hText = generator.GenerateHeaderText();
+            var hText = generator.GenerateHeaderText(generator.AnimatedVisualSourceInfo);
 
             var assetList = generator.GetAssetsList();
 
             return (cppText, hText, assetList);
         }
 
-        protected override void WritePrivateThemeHeader(CodeBuilder builder)
+        protected override void WriteThemeHeader(HeaderBuilder builder)
         {
             // Add a field to hold the theme property set.
-            builder.WriteLine($"winrt::{Wuc}::{T.CompositionPropertySet} {SourceInfo.ThemePropertiesFieldName}{{ nullptr }};");
+            builder.Private.WriteLine($"winrt::{Wuc}::{T.CompositionPropertySet} {SourceInfo.ThemePropertiesFieldName}{{ nullptr }};");
 
             // Add fields for each of the theme properties.
             foreach (var prop in SourceInfo.SourceMetadata.PropertyBindings)
             {
                 if (SourceInfo.GenerateDependencyObject)
                 {
-                    builder.WriteLine($"static Windows::UI::Xaml::DependencyProperty^ _{prop.Name}Property;");
-                    builder.WriteLine($"static void On{prop.Name}Changed(Windows::UI::Xaml::DependencyObject^ d, Windows::UI::Xaml::DependencyPropertyChangedEventArgs^ e);");
+                    builder.Private.WriteLine($"static Windows::UI::Xaml::DependencyProperty^ _{prop.Name}Property;");
+                    builder.Private.WriteLine($"static void On{prop.Name}Changed(Windows::UI::Xaml::DependencyObject^ d, Windows::UI::Xaml::DependencyPropertyChangedEventArgs^ e);");
                 }
                 else
                 {
@@ -77,31 +77,22 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                         _ => throw new InvalidOperationException(),
                     };
 
-                    WriteInitializedField(builder, exposedTypeName, $"_theme{prop.Name}", S.VariableInitialization(initialValue));
+                    WriteInitializedField(builder.Private, exposedTypeName, $"_theme{prop.Name}", S.VariableInitialization(initialValue));
                 }
             }
 
-            builder.WriteLine();
-            builder.WriteLine($"winrt::{Wuc}::{T.CompositionPropertySet} EnsureThemeProperties(winrt::{Wuc}::{T.Compositor} compositor);");
-            builder.WriteLine();
-        }
+            builder.Private.WriteLine();
+            builder.Private.WriteLine($"winrt::{Wuc}::{T.CompositionPropertySet} EnsureThemeProperties(winrt::{Wuc}::{T.Compositor} compositor);");
+            builder.Private.WriteLine();
 
-        protected override void WriteInternalAccessibility(CodeBuilder builder)
-        {
-            // C++ doesn't have an equivalent to CX's "internal" so just be public.
-            builder.WriteLine("public:");
-        }
-
-        protected override void WriteInternalThemeHeader(CodeBuilder builder)
-        {
             // Write properties declarations for each themed property.
             foreach (var prop in SourceInfo.SourceMetadata.PropertyBindings)
             {
-                builder.WriteLine($"{QualifiedTypeName(prop.ExposedType)} {prop.Name}();");
-                builder.WriteLine($"void {prop.Name}({QualifiedTypeName(prop.ExposedType)} value);");
+                builder.Internal.WriteLine($"{QualifiedTypeName(prop.ExposedType)} {prop.Name}();");
+                builder.Internal.WriteLine($"void {prop.Name}({QualifiedTypeName(prop.ExposedType)} value);");
             }
 
-            builder.WriteLine();
+            builder.Internal.WriteLine();
         }
 
         protected override void WriteThemePropertyImpls(CodeBuilder builder)

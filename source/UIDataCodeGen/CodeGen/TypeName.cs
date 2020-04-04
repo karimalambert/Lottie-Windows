@@ -46,7 +46,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
         public string GetQualifiedName(Stringifier stringifier)
             => string.IsNullOrWhiteSpace(_namespaceName)
                 ? UnqualifiedName
-                : stringifier.Namespace(_namespaceName + UnqualifiedName);
+                : stringifier.Namespace($"{_namespaceName}.{UnqualifiedName}");
 
         public string GetNamespace(Stringifier stringifier)
             => stringifier.Namespace(_namespaceName);

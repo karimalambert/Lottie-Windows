@@ -631,14 +631,15 @@ sealed class LottieFileProcessor
         var result = new CodegenConfiguration
         {
             ClassName = _className,
-            Width = _lottieComposition.Width,
-            Height = _lottieComposition.Height,
-            Duration = _lottieComposition.Duration,
             DisableOptimization = _options.DisableCodeGenOptimizer,
+            Duration = _lottieComposition.Duration,
             GenerateDependencyObject = _options.GenerateDependencyObject,
-            SourceMetadata = _translationResults[0].SourceMetadata,
+            Height = _lottieComposition.Height,
             ObjectGraphs = _translationResults.Select(tr => ((CompositionObject)tr.RootVisual, tr.MinimumRequiredUapVersion)).ToArray(),
+            Public = _options.Public,
+            SourceMetadata = _translationResults[0].SourceMetadata,
             ToolInfo = GetToolInvocationInfo(languageSwitch).ToArray(),
+            Width = _lottieComposition.Width,
         };
 
         if (!string.IsNullOrWhiteSpace(_options.Interface))

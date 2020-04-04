@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -152,7 +153,6 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         internal void UnIndent()
         {
-            Debug.Assert(_indentCount > 0, "Unmatched Indent()/UnIndent() calls");
             _indentCount--;
         }
 
@@ -179,6 +179,8 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
 
         internal IEnumerable<string> ToLines(int indentCount)
         {
+            var indent = string.Empty;
+
             foreach (var line in _lines)
             {
                 var builder = line.Text as CodeBuilder;
@@ -198,7 +200,21 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie.UIData.CodeGen
                     }
                     else
                     {
-                        yield return new string(' ', (line.IndentCount + indentCount) * IndentSize) + lineText;
+                        var indentSpaceCount = (line.IndentCount + indentCount) * IndentSize;
+
+                        if (indentSpaceCount <= 0)
+                        {
+                            // This fixes up any mismatch of indents. It will probably result.
+                            // in the output looking wrong, but that's better than crashing.
+                            indentSpaceCount = 0;
+                        }
+
+                        if (indent.Length != indentSpaceCount)
+                        {
+                            indent = new string(' ', indentSpaceCount);
+                        }
+
+                        yield return indent + lineText;
                     }
                 }
             }
